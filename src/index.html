@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Mike's Slippy Tree</title>
+  <script src="script.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+   <div>
+    <p>Load:<p>
+    <input id="id" placeholder="WikiTree ID"/>
+    <button id="load">Load</button>
+   </div>
+   <div>
+    <button id="expand" disabled>Expand</button>
+    <p>Scale:<p>
+    <input id="scale" disabled type="range" step="any" min="50" max="250" value="100">
+   </div>
+   <div id="loginbox">
+    <button id="login">Login</button>
+   </div>
+   <div id="logoutbox" class="hidden">
+    <button id="logout">Logout</button>
+   </div>
+   <div id="helpbutton">
+    <button id="logout">Help</button>
+   </div>
+  </header>
+
+  <main id="scrollpane">
+   <svg id="svg" class="tree"></svg>
+   <div id="helpcontainer">
+    <div id="help">
+     <h1>Mike's Slippy Tree</h1>
+     <p>
+      An experimental interface showing parent and child relationships as a graph,
+      not a tree. The graph requires a <b>focus</b>: spouses and siblings are
+      displayed relative to that focus, and a change in focus will change the order.
+     </p>
+     <p>
+      People in gray are not fully loaded, so their relationships will be incomplete.
+      Click on them to expand the tree around them.
+      The <b>Expand</b> button will do this for up to fifty unloaded people closest to the focus node.
+     </p>
+     <p>
+      Relationships are blue/red to a father/mother, with line thickness showing
+      certainty: DNA confirmed are the thickest, with uncertain relationships shown
+      as a dotted line
+     </p>
+     <p>
+      Source: <a href="https://github.com/faceless2/wikitree-slippy-tree">https://github.com/faceless2/wikitree-slippy-tree</a>
+     </p>
+     <div style="display:flex; justify-content: space-between">
+      <svg class="tree" width="150" height="40">
+       <line x1="0" y1="10" x2="150" y2="10" class="focus father dna"/>
+       <text x="75" y="35" textAnchor="middle">Father (DNA confirmed)</text>
+      </svg>
+      <svg class="tree" width="150" height="40">
+       <line x1="0" y1="10" x2="150" y2="10" class="focus mother confident"/>
+       <text x="75" y="35" textAnchor="middle">Mother (confident)</text>
+      </svg>
+      <svg class="tree" width="150" height="40">
+       <line x1="0" y1="10" x2="150" y2="10" class="focus nonbiological"/>
+       <text x="75" y="35" textAnchor="middle">Non-biological link</text>
+      </svg>
+      <svg class="tree" width="150" height="40">
+       <line x1="0" y1="10" x2="150" y2="10" class="focus father uncertain"/>
+       <text x="75" y="35" textAnchor="middle">Father (uncertain)</text>
+      </svg>
+     </div>
+     <p style="text-align: center; padding-top:2em">
+      <b>Click this window to close</b>
+     </p>
+    </div>
+   </div>
+  </main>
+
+</body>
+</html>

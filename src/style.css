@@ -1,0 +1,143 @@
+:root {
+    --mother:  red;
+    --father:  blue;
+    --neutral: #8C8;
+    --marriage: #F8FFF8;
+    --header: 50px;
+}
+:root, input, button {
+    font: 14px sans-serif;
+}
+body, html {
+    margin: 0;
+}
+body {
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+header {
+    padding: 8px;
+    background: #888;
+    color: white;
+    display: flex;
+    box-sizing: border-box;
+    height: var(--header);
+    justify-content: space-around;
+    align-items: center;
+}
+.hidden {
+    display: none !important;
+}
+#scale {
+    min-width: 200px;
+}
+header > div {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+#scrollpane {
+    position: relative;
+    flex: 1;
+    display: block;
+    overflow: scroll;
+    height: calc(100% - var(--header));
+    align-items: center;
+}
+#helpcontainer {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: #0008;
+}
+#help {
+    --width: 700px;
+    --height: 340px;
+    left: calc(50% - var(--width));
+    height: calc(50% - var(--height));
+    width: var(--width);
+    height: var(--height);
+    background: white;
+    border: 2px solid black;
+    padding: 20px;
+}
+#scrollpane:has(foreignObject) {
+    justify-content: center;
+}
+svg.tree a[href] {
+    fill: blue;
+}
+svg.tree {
+    display: block;
+    position: relative;
+}
+svg.tree text {
+    font-size: 10px;
+    text-anchor: middle;
+}
+svg.tree rect {
+    fill: none;
+    stroke: #aaa;
+    stroke-width: 1px;
+    cursor: pointer;
+}
+svg.tree .living rect {
+    stroke: #aFa;
+}
+svg.tree .focus rect {
+    stroke: red;
+    stroke-width: 2px; 
+}
+svg.tree :is(path,line) {
+    opacity: 0.1;
+    fill: none;
+    stroke-width: 4px;
+}
+svg.tree .focus {
+    opacity: 0.8;
+}
+svg.tree .mother {
+    stroke: var(--mother);
+}
+svg.tree .father {
+    stroke: var(--father);
+}
+svg.tree :is(path,line).marriage {
+    stroke-width: 80px;
+    opacity: 1;
+    stroke: var(--marriage);
+}
+svg.tree .labels .marriage {
+    font-size: 8px;
+    fill: black;
+    text-anchor: middle;
+    transform: translate(0, 0.2em);
+}
+svg.tree .dna {
+    stroke-width: 16px;
+}
+svg.tree .confident {
+    stroke-width: 8px;
+}
+svg.tree .nonbiological {
+    stroke: var(--neutral);
+}
+svg.tree .uncertain {
+    stroke-dasharray: 8px;
+}
+svg.tree .pending {
+    opacity: 0.3;
+}
+svg.tree .male rect {
+    fill: #CCF;
+}
+svg.tree .female rect {
+    fill: #FCC;
+}
