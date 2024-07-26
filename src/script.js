@@ -5,12 +5,16 @@ const APPID = "MikesSlippyTree";
 const DEMOID = "Windsor-1";
 const SVG = "http://www.w3.org/2000/svg";
 const SPOUSE = 0, CHILD = 1, PARENT = 2, SIBLING = 3;
+const MINSCALE = 0.5, MAXSCALE = 2.5;
 
 /**
  * This is the entry point
  */
 function initialize(svg) {
-    const slippy = new SlippyTree({element: document.getElementById("scrollpane") });
+    const slippy = new SlippyTree({
+        element: "#scrollpane",
+        menu: "#personmenu"
+    });
 
     login();
 
@@ -37,7 +41,8 @@ function initialize(svg) {
     loadButton.addEventListener("click", (e) => {
         helpContainer.classList.add("hidden");
         let key = idField.value.trim();
-        slippy.load([key], true); 
+        slippy.reset();
+        slippy.load(key);
     });
     helpButton.addEventListener("click", (e) => {
         helpContainer.classList.remove("hidden");
@@ -58,7 +63,7 @@ function initialize(svg) {
     if (key) {
         id.value = key.trim();
         if (id.value.length) {
-            load([id.value], true);
+            load(id.value);
         }
     }
 }
@@ -178,8 +183,12 @@ class SlippyTree {
     constructor(props) {
         const that = this;
         this.scrollPane = typeof props.element == "string" ? document.querySelector(props.element) : props.element;
+        this.personMenu = typeof props.menu == "string" ? document.querySelector(props.menu) : props.menu;
         while (this.scrollPane.firstChild) {
             this.scrollPane.firstChild.remove();
+        }
+        if (this.personMenu) {
+            this.scrollPane.appendChild(this.personMenu);
         }
         this.svg = document.createElementNS(SVG, "svg");
         this.svg.classList.add("slippy-tree");
@@ -212,6 +221,80 @@ class SlippyTree {
             this.scale.cx = (this.scrollPane.clientWidth / 2 + this.scrollPane.scrollLeft) / this.scale.scale;
             this.scale.cy = (this.scrollPane.clientHeight / 2 + this.scrollPane.scrollTop) / this.scale.scale;
         });
+
+        let pointers = [];
+        // Quick click/release with one point: click on person
+        // Long click with one pointer: popup
+        // Remember: clientX is relative to the SCROLLPANE
+        this.svg.addEventListener("pointerdown", (e) => {
+            pointers.push({x:e.clientX, y:e.clientY, id:e.pointerId, when:Date.now() });
+        });
+        this.svg.addEventListener("pointerup", (e) => {
+            if (e.isPrimary) {
+                pointers.length = 0;
+            } else {
+                for (let i=0;i<pointers.length;i++) {
+                    if (pointers[i].id == e.pointerId) {
+                        pointers.splice(i, 1);
+                    }
+                }
+            }
+        });
+        this.svg.addEventListener("pointermove", (e) => {
+            e.preventDefault();
+            let x = e.clientX;
+            let y = e.clientY;
+            let oscale = this.scale.scale;
+            if (pointers.length == 1) {
+                let elt = document.elementFromPoint(e.pageX, e.pageY);
+                if (elt == this.svg) {    // Drag scroll with one finger if over background
+                    let dx = x - pointers[0].x;
+                    let dy = y - pointers[0].y;
+                    let ocx = this.scale.cx;
+                    let ocy = this.scale.cy;
+                    let ncx = ocx - dx / oscale;
+                    let ncy = ocy - dy / oscale;
+                    this.rescale({cx:ncx, cy:ncy});
+                    pointers[0].x = x;
+                    pointers[0].y = y;
+                }
+            } else if (pointers.length == 2) {
+                for (let i=0;i<pointers.length;i++) {
+                    if (pointers[i].id == e.pointerId) {
+                        let ox0 = pointers[0].x;
+                        let oy0 = pointers[0].y;
+                        let ox1 = pointers[1].x;
+                        let oy1 = pointers[1].y;
+                        let nx0 = i==0 ? x : ox0;
+                        let ny0 = i==0 ? y : oy0;
+                        let nx1 = i==1 ? x: ox1;
+                        let ny1 = i==1 ? y: oy1;
+                        let od = Math.sqrt((ox1-ox0)*(ox1-ox0) + (oy1-oy0)*(oy1-oy0));
+                        let nd = Math.sqrt((nx1-nx0)*(nx1-nx0) + (ny1-ny0)*(ny1-ny0));
+                        let nscale = oscale * nd / od;
+                        let dx = ((nx1-ox1)+(nx0-ox0)) / 2;
+                        let dy = ((ny1-oy1)+(ny0-oy0)) / 2;
+                        let ocx = this.scale.cx;
+                        let ocy = this.scale.cy;
+                        let ncx = ocx - dx / oscale;
+                        let ncy = ocy - dy / oscale;
+//                        console.log("old=[["+ox0+" "+oy0+"] ["+ox1+" "+oy1+"]] new=[["+nx0+" "+ny0+"] ["+nx1+" "+ny1+"]] dx=["+dx+" "+dy+"]")
+                        nscale = Math.min(MAXSCALE, Math.max(MINSCALE, nscale));
+                        this.rescale({scale:nscale, cx:ncx, cy:ncy});
+                        pointers[0].x = nx0;
+                        pointers[0].y = ny0;
+                        pointers[1].x = nx1;
+                        pointers[1].y = ny1;
+                    }
+                }
+            }
+        });
+        this.svg.addEventListener("wheel", (e) => {
+            let scale = this.scale.scale;
+            let d = e.deltaY / -500;
+            nscale = Math.min(MAXSCALE, Math.max(MINSCALE, scale + d));
+            this.rescale({scale:scale});
+        });
     }
 
     /**
@@ -219,38 +302,38 @@ class SlippyTree {
      * @param props a map to merge over the current scale map
      */
     rescale(m) {
-        let o = this.scale;
-        for (let key in m) {
-            o[key] = m[key];
+        if (this.people.length == 0) {
+            this.scale = {scale: 1, cx:0, cy: 0, x0:0, x1:0, y0:0, y1:0};
+        } else {
+            for (let key in m) {
+                this.scale[key] = m[key];
+            }
         }
+        let o = this.scale;
         const container = this.svg.querySelector(".container");
         const scrollpane = this.scrollPane;
         const svg = this.svg;
-        let x0 = container.x0;
-        let y0 = container.y0;
-        let x1 = container.x1;
-        let y1 = container.y1;
-        container.setAttribute("transform", "scale(" + o.scale + " " + o.scale + ") translate(" + (-o.x0) + " " + (-o.y0) + ")");
-        svg.setAttribute("width", (o.x1 - o.x0) * o.scale);
-        svg.setAttribute("height", (o.y1 - o.y0) * o.scale);
-        let x = Math.round(scrollpane.scrollLeft = (o.cx * o.scale) - (scrollpane.clientWidth / 2));
-        let y = Math.round(scrollpane.scrollTop = (o.cy * o.scale) - (scrollpane.clientHeight / 2));
-        if (svg.clientWidth <= scrollpane.clientWidth) {
-            svg.style.left = Math.round((scrollpane.clientWidth - svg.clientWidth) / 2) + "px";
-            scrollpane.scrollLeft = 0;
-        } else {
-            svg.style.left = "0";
-            scrollpane.scrollLeft = x;
-        }
-        if (svg.clientHeight <= scrollpane.clientHeight) {
-            svg.style.top = Math.round((scrollpane.clientHeight - svg.clientHeight) / 2) + "px";
-            scrollpane.scrollTop = 0;
-        } else {
-            svg.style.top = "0";
-            scrollpane.scrollTop = y;
-        }
+        const targetWidth = Math.round((o.x1 - o.x0) * o.scale);
+        const targetHeight = Math.round((o.y1 - o.y0) * o.scale);
+        const viewWidth = this.scrollPane.clientWidth;
+        const viewHeight = this.scrollPane.clientHeight;
+        const usedWidth = Math.max(viewWidth, targetWidth);
+        const usedHeight = Math.max(viewHeight, targetHeight);
+        const targetX = Math.round(o.cx * o.scale);
+        const targetY = Math.round(o.cy * o.scale);
+
+        svg.setAttribute("width", usedWidth);
+        svg.setAttribute("height", usedHeight);
+        svg.setAttribute("style", "overflow: hidden");
+        let tran = "translate(" + ((usedWidth - targetWidth) / 2) + " " + ((usedHeight - targetHeight) / 2) + ") ";
+        tran += "scale(" + o.scale + " " + o.scale + ") ";
+        tran += "translate(" + (-o.x0) + " " + (-o.y0) + ")";
+        container.setAttribute("transform", tran);
+        let x = Math.round(targetX - viewWidth / 2);
+        let y = Math.round(targetY - viewHeight / 2);
+        scrollpane.scrollLeft = x;
         scrollpane.scrollTop = y;
-//        console.log("RESCALE: scale="+JSON.stringify(o)+" sp=["+x+" "+y+" "+scrollpane.scrollWidth+" "+scrollpane.scrollHeight + "]");
+//        console.log("RESCALE: scale="+JSON.stringify(o)+" target=["+targetWidth+" "+targetHeight+"] view=["+viewWidth+" "+viewHeight+"] center=["+targetX+" "+targetY+"] tr="+tran+" sp="+x+" "+y);
     }
 
     /**
@@ -262,7 +345,7 @@ class SlippyTree {
         this.focus = this.refocusStart = this.refocusEnd = null;
         // Bit add-hoc this
         const container = this.svg.firstChild;
-        for (let n=container.firstchild;n;n=n.nextSibling) {
+        for (let n=container.firstChild;n;n=n.nextSibling) {
             while (n.firstChild) {
                 n.firstChild.remove();
             }
@@ -283,6 +366,20 @@ class SlippyTree {
                 person.svg.addEventListener("click", () => {
                     this.refocus(person);
                 });
+                /*
+                person.svg.addEventListener("mousedown", (e) => {
+                    person.__timer = setTimeout(() => {
+                        this.personMenu.classList.remove("hidden");
+                        let x = this.svg.style.
+                        this.personMenu.style.left = e.offsetX + "px";
+                        this.personMenu.style.top = e.offsetY + "px";
+                    }, 1000)
+                });
+                person.svg.addEventListener("mouseup", () => {
+                    clearTimeout(person.__timer);
+                    this.personMenu.classList.add("hidden");
+                });
+                */
                 person.svg.setAttribute("id", "person-" + person.id);
                 person.svg.appendChild(rect = document.createElementNS(SVG, "rect"));
                 person.svg.appendChild(path = document.createElementNS(SVG, "path"));
@@ -340,7 +437,7 @@ class SlippyTree {
      */
     refocus(focus) {
         if (!focus.loaded) { // Not loaded! Load then try again
-            this.load([focus.data.Name], false, focus);
+            this.load(focus.data.Name, focus);
             return;
         }
         console.log("Focus " + focus);
@@ -907,8 +1004,11 @@ class SlippyTree {
         y0 -= pt;
         x1 += pr;
         y1 += pb;
-        let cx = this.scale.cx0 + (this.focus.tx - this.scale.cx0) * t;
-        let cy = this.scale.cy0 + (this.focus.ty - this.scale.cy0) * t;
+        let cx, cy;
+        if (this.people.length) {
+            cx = this.scale.cx0 + (this.focus.tx - this.scale.cx0) * t;
+            cy = this.scale.cy0 + (this.focus.ty - this.scale.cy0) * t;
+        }
         this.rescale({x0:x0, y0:y0, x1:x1, y1:y1, cx:cx, cy:cy});
     }
 
@@ -982,7 +1082,7 @@ class SlippyTree {
                 }
             }
             if (ids.length) {
-                this.load(ids, false, focus);
+                this.load(ids, focus);
             }
         }
     }
@@ -995,7 +1095,10 @@ class SlippyTree {
      * @param resetFirst if true, do a reset if our load is successful
      * @param focus which node to focus on when load completes, or first new node loaded if not set
      */
-    load(ids, resetFirst, focus) {
+    load(ids, focus) {
+        if (!Array.isArray(ids)) {
+            ids = [ids];
+        }
         console.log("Load " + ids.join());
         const url = APIURL + "?appId=" + APPID + "&action=getRelatives&keys=" + ids.join(",") + "&fields=Id,Name,FirstName,MiddleName,LastNameAtBirth,LastNameCurrent,Suffix,BirthDate,DeathDate,Gender,DataStatus,IsLiving,IsMember,Privacy&getParents=true&getChildren=true&getSpouses=true&getDescendants=true";
     //    const url = "test2.json";
@@ -1005,9 +1108,6 @@ class SlippyTree {
           .then(x => x.json())
           .then(data => {
               if (data[0].items) {
-                  if (resetFirst) {
-                      this.reset();
-                  }
                   data = data[0].items;
                   let len = this.people.length;
                   for (let i=0;i<data.length;i++) {

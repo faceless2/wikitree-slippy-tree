@@ -1,3 +1,6 @@
+:root {
+    --header-height: 40px;
+}
 :root, input, button {
     font: 14px sans-serif;
 }
@@ -7,24 +10,19 @@ body, html {
 body {
     height: 100vh;
     overflow: hidden;
-    display: flex;
-    flex-direction: column;
 }
 header {
+    height: var(--header-height);
     padding: 8px;
     background: #888;
     color: white;
     display: flex;
     box-sizing: border-box;
-    height: var(--header);
     justify-content: space-around;
     align-items: center;
 }
 .hidden {
     display: none !important;
-}
-#scale {
-    min-width: 200px;
 }
 header > div {
     display: flex;
@@ -32,7 +30,7 @@ header > div {
     align-items: center;
 }
 main {
-    flex: 1;
+    height: calc(100vh - var(--header-height));
     position: relative;
 }
 #scrollpane {
@@ -40,6 +38,8 @@ main {
     height: 100%;
     position: relative;
     overflow: scroll;
+    touch-action: none;
+    user-select: none;
 }
 #helpContainer {
     position: absolute;
@@ -63,20 +63,22 @@ main {
     padding: 20px;
 }
 
-.personmenu {
+#personmenu {
     position: absolute;
-    display: block;
+    display: flex;
     width: fit-content;
     border: 1px solid black;
-    padding: 8px;
+    background: white;
+    padding: 20px;
     font-size: 20px;
     filter: drop-shadow(6px 8px 4px #0008);
+    z-index:999;
 
     > div {
         border-top: 1px dotted gray;
         padding: 8px;
     }
-    > div.focus {
+    > div:hover {
         background-color: #CFC;
     }
 }
@@ -84,11 +86,7 @@ body > #personmenu {
     display: none;
 }
 
-/**
- * CSS nesting, assuming support for "new" post Aug-2023 syntax
- */
 .slippy-tree {
-
     --mother:  red;
     --father:  blue;
     --neutral: #8C8;
@@ -106,87 +104,80 @@ body > #personmenu {
     position: relative;
     padding: 20px; /* Hack! Padding doesnt apply in SVG, but we read this value in the JS to compute position */
 
-    a[href] {
-        fill: blue;
-    }
+}
+.slippy-tree a[href] {
+    fill: blue;
+}
 
-    text {
-        font-size: 10px;
-        text-anchor: middle;
-        margin: 4px;    /* Hack! Margin doesnt apply in SVG, but we read this value in the JS to compute position */
-    }
+.slippy-tree text {
+    font-size: 10px;
+    text-anchor: middle;
+    margin: 4px;    /* Hack! Margin doesnt apply in SVG, but we read this value in the JS to compute position */
+}
 
-    .people {
-        rect {
-            fill: none;
-            stroke: #aaa;
-            stroke-width: 1px;
-            cursor: pointer;
-        }
+.slippy-tree .people rect {
+    fill: none;
+    stroke: #aaa;
+    stroke-width: 1px;
+    cursor: pointer;
+}
 
-        .pending {
-            opacity: 0.3;
-        }
+.slippy-tree .people .pending {
+    opacity: 0.3;
+}
 
-        .male rect {
-            fill: #CCF;
-        }
+.slippy-tree .people .male rect {
+    fill: #CCF;
+}
 
-        .female rect {
-            fill: #FCC;
-        }
+.slippy-tree .people .female rect {
+    fill: #FCC;
+}
 
-        path {
-            display: none;
-        }
+.slippy-tree .people path {
+    display: none;
+}
 
-        .living path {
-            display: initial;
-            fill: var(--living);
-        }
-        .member path {
-            display: initial;
-            fill: var(--member);
-        }
+.slippy-tree .people .living path {
+    display: initial;
+    fill: var(--living);
+}
+.slippy-tree .people .member path {
+    display: initial;
+    fill: var(--member);
+}
 
 
-        .activeuser path {
-            d: path("M 100% 100% v 25% l -25% -25% z");
-            fill: var(--activeuser);
-        }
+.slippy-tree .people .activeuser path {
+    fill: var(--activeuser);
+}
 
-        .focus rect {
-            stroke: red;
-            stroke-width: 2px; 
-        }
-    }
+.slippy-tree .people .focus rect {
+    stroke: red;
+    stroke-width: 2px; 
+}
 
-    .relations {
-        :is(path,line) {
-            opacity: 0.1;
-            fill: none;
-            stroke-width: 4px;
-        }
-        .mother                 { stroke: var(--mother); }
-        .father                 { stroke: var(--father); }
-        .marriage               { stroke: var(--marriage); stroke-width: 2px; opacity: 0.3; }
-        .marriage.focus         { opacity: 0.6; }
-        .dna                    { stroke-width: 16px; }
-        .confident              { stroke-width: 8px; }
-        .nonbiological          { stroke: var(--neutral); }
-        .uncertain              { stroke-dasharray: 8px; }
-    }
+.slippy-tree .relations :is(path, line) {
+    opacity: 0.1;
+    fill: none;
+    stroke-width: 4px;
+}
+.slippy-tree .relations .mother                 { stroke: var(--mother); }
+.slippy-tree .relations .father                 { stroke: var(--father); }
+.slippy-tree .relations .marriage               { stroke: var(--marriage); stroke-width: 2px; opacity: 0.3; }
+.slippy-tree .relations .marriage.focus         { opacity: 0.6; }
+.slippy-tree .relations .dna                    { stroke-width: 16px; }
+.slippy-tree .relations .confident              { stroke-width: 8px; }
+.slippy-tree .relations .nonbiological          { stroke: var(--neutral); }
+.slippy-tree .relations .uncertain              { stroke-dasharray: 8px; }
 
-    .labels {
-        .marriage {
-            font-size: 8px;
-            fill: black;
-            text-anchor: left;
-            transform: translate(8px, 0.2em);
-        }
-    }
+.slippy-tree .labels .marriage {
+    font-size: 8px;
+    fill: black;
+    text-anchor: left;
+    transform: translate(8px, 0.2em);
+}
 
-    :is(.relations, .people. .labels) .focus {
-        opacity: 0.8;
-    }
+.slippy-tree :is(.relations, .people. .labels) .focus {
+    opacity: 0.8;
 }
