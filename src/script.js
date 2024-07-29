@@ -524,7 +524,7 @@ class SlippyTree {
         // position based on focus node and priority
         // After this each person has "tx" and "ty" value set
         let ordered = this.order(focus, this.people);
-        this.position(focus, ordered);
+        this.placeNodes(focus, ordered);
 
         // Re-add people to SVG in priority order, and recreate edges.
         while (edges.firstChild) {
@@ -625,13 +625,12 @@ class SlippyTree {
      */
     order(focus, people) {
         let q = [];
-        q.push(focus);
-        // Of course possibly for nephews to marry aunts, etc.
-        // which is why generation needs a start point.
-        focus.generation = 0;
-        let mingen = 0;
         // Nodes are hidden if they have no name
         // Everything is hidden unless reachable from a non-hidden node
+        // Possible for nephews to marry aunts, etc, so even generations need a focus.
+        q.push(focus);
+        focus.generation = 0;
+        let mingen = 0;
         for (const person of people) {
             person.hidden = true;
         }
@@ -686,7 +685,7 @@ class SlippyTree {
     /**
      * Position all the nodes.
      */
-    position(focus, ordered) {
+    placeNodes(focus, ordered) {
         const style = getComputedStyle(this.svg);
         const MINWIDTH = evalLength(style, style.getPropertyValue("--min-person-width"));
         const SPOUSEMARGIN = evalLength(style, style.getPropertyValue("--spouse-margin"));
@@ -848,7 +847,31 @@ class SlippyTree {
                 }
                 if (firstchild) { // Y value also derived from mid-point of children
                     let midy = (firstchild.ty + lastchild.ty - spouseheight) / 2;
-                    y = isNaN(y) ? midy : Math.max(y, midy);
+                    if (isNaN(y)) {
+                        // This is first item in column, position based on children
+                        y = midy;
+                    } else if (midy < y) {
+                        /*
+                        // Midpoint of children is higher than our minimum position.
+                        // Shift all descendents down to match.
+                        const shifter = function(person, diff) {
+                            person.ty += diff;
+                            for (const spouse of person.layout.spouses) {
+                                spouse.ty += diff;
+                            }
+                            for (const child of person.children()) {
+                                shifter(child, diff);
+                            }
+                        };
+                        shifter(person, y - midy);
+                        ** disabled, this makes the tree bigger than necessary.
+                        ** force pull is not perfect but will do.
+                        */
+                    } else {
+                        // Midpoint of children is lower than our minimum position.
+                        // Move our position down to their midpoint.
+                        y = midy;
+                    }
                 }
                 if (isNaN(y)) { // No previous element, no children
                     y = person.height / 2;
@@ -892,7 +915,7 @@ class SlippyTree {
         // Layout is valid but we can improve it by doing a force layout between parents
         // and children to pull things to the center.
         let pass;
-        const numpasses = 5000;       // Seems generally enough.
+        const numpasses = 5000;       // Arbitrary. Usually enough
         for (let pass=0;pass<numpasses;pass++) {
             for (const f of forces) {
                 // Compute vertical distance between parent/child and derive force
