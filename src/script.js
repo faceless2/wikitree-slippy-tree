@@ -637,6 +637,7 @@ class SlippyTree {
         this.view.cx0 = this.view.cx;
         this.view.cy0 = this.view.cy;
         this.view.callback = callback;
+        this.view.peopleLength = this.people.length;
         window.requestAnimationFrame(() => { this.draw(); });
     }
 
@@ -940,7 +941,7 @@ class SlippyTree {
         // Layout is valid but we can improve it by doing a force layout between parents
         // and children to pull things to the center.
         let pass;
-        const numpasses = 5000;       // Arbitrary. Usually enough
+        const numpasses = 500;       // Arbitrary. Usually enough
         for (let pass=0;pass<numpasses;pass++) {
             for (const f of forces) {
                 // Compute vertical distance between parent/child and derive force
@@ -968,9 +969,11 @@ class SlippyTree {
             // There were MANY variations of this tried, this method was the one that worked!
             for (const person of ordered) {
                q.push(person);
+               person.queued = true;
             }
             let person, count = 0;
-            while ((person = q.shift()) && count++ < 10 * ordered.length) {
+            while ((person = q.pop()) && count++ < 10 * ordered.length) {       // change to q.shift() to kill Chrome's naive Array implementation
+                person.queued = false;
                 if (person.layout.prev) {
                     let diff = 0;
                     let distance = person.ty - person.layout.prev.ty;
@@ -983,7 +986,10 @@ class SlippyTree {
                         person.layout.prev.ty -= diff / 2;
                         person.ty += diff / 2;
                         q.push(person);
-                        q.push(person.layout.prev);
+                        if (!person.queued) {
+                            person.queued = true;
+                            q.push(person.layout.prev);
+                        }
                     }
                 }
             }
@@ -1027,7 +1033,8 @@ class SlippyTree {
         t = t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2;  // Simple cubic bezier easing
 
         let x0 = null, x1, y0, y1;
-        for (const person of this.people) {
+        for (let i=0;i<this.view.peopleLength;i++) {
+            const person = this.people[i];
             if (!person.hidden) {
                 person.cx = person.x + (person.tx - person.x) * t;
                 person.cy = person.y + (person.ty - person.y) * t;
@@ -1079,46 +1086,7 @@ class SlippyTree {
                 px2 = px0 + (px3 - px0) / 2;
                 py2 = py3;
             }
-            let d;
-            if (false) {
-                /*
-                // Compute outline of bezier. Tried outlineing strokes, but a lot
-                // slower and just varying stroke width gave better results.
-                // Uses the "bezier.js" from https://pomax.github.io/bezierjs/
-                const bezier = new Bezier(px0, py0, px01, py0, px10, py1, px1, py1);
-                let d0 = "", d1 = "";
-                let s = bezier.outlineshapes(3);
-                let first = true;
-                for (let i=0;i<s.length;i++) {
-                    let points = s[i].forward.points;
-                    for (let j=0;j<points.length;j++) {
-                        if (j == 0 && i == 0) {
-                            d0 += "M ";
-                        } else if (j == 0) {
-                            continue;
-                        } else if (j == 1) {
-                            d0 += points.length == 3 ? "Q " : "C ";
-                        }
-                        d0 += Math.round(points[j].x) + " " + Math.round(points[j].y) + " ";
-                        first = false;
-                    }
-                    points = s[s.length - i - 1].back.points;
-                    for (let j=0;j<points.length;j++) {
-                        if (j == 0 && i == 0) {
-                            d1 += "L ";
-                        } else if (j == 0) {
-                            continue;
-                        } else if (j == 1) {
-                            d1 += points.length == 3 ? "Q " : "C ";
-                        }
-                        d1  += Math.round(points[j].x) + " " + Math.round(points[j].y) + " ";
-                    }
-                }
-                d = d0 + d1;
-                */
-            } else {
-                d = "M " + px0 + " " + py0 + " C " + px1 + " " + py1 + " " + px2 + " " + py2 + " " + px3 + " " + py3;
-            }
+            let d = "M " + px0 + " " + py0 + " C " + px1 + " " + py1 + " " + px2 + " " + py2 + " " + px3 + " " + py3;
             path.setAttribute("d", d);
         }
         for (let label=labels.firstElementChild;label;label=label.nextElementSibling) {
@@ -1129,7 +1097,6 @@ class SlippyTree {
             label.setAttribute("x", cx);
             label.setAttribute("y", cy);
         }
-        /* Hack! None of these values apply in SVG, but it lets us style with CSS */
         let cx, cy;
         if (this.people.length) {
             cx = this.view.cx0 + (this.focus.tx - this.view.cx0) * t;
@@ -1137,7 +1104,7 @@ class SlippyTree {
         }
         this.reposition({x0:x0, y0:y0, x1:x1, y1:y1, cx:cx, cy:cy});
         if (t == 1 && this.view.callback) {
-            this.view.callback();
+            setTimeout(() => { this.view.callback(); }, 0);
         }
 
     }

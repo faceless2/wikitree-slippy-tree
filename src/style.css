@@ -83,7 +83,7 @@ h1 {
 
 #personMenu {
     position: absolute;
-    width: fit-content;
+    width: max-content;
     border: 1px solid black;
     background: white;
     padding: 20px;
@@ -200,14 +200,13 @@ h1 {
 .slippy-tree .relations .coparent               { stroke: var(--coparent); stroke-width: 2px; opacity: 0.3; stroke-dasharray: 2px; }
 .slippy-tree .relations .coparent.focus         { opacity: 0.6; }
 .slippy-tree .relations .dna                    { stroke-width: 16px; }
-.slippy-tree .relations .confident              { stroke-width: 8px; }
+.slippy-tree .relations .confident              { stroke-width: 9px; }
 .slippy-tree .relations .nonbiological          { stroke: var(--neutral); }
 .slippy-tree .relations .uncertain              { stroke-dasharray: 8px; }
 
 .slippy-tree .labels .marriage {
     font-size: 8px;
     fill: black;
-    text-anchor: left;
     transform: translate(8px, 0.2em);
 }
 
