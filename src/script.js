@@ -225,17 +225,8 @@ class SlippyTree {
         // Long click with one pointer: popup
         // Remember: clientX is relative to the SCROLLPANE
         this.svg.addEventListener("pointerdown", (e) => {
-            pointers.push({ ox:e.offsetX, oy:e.offsetY, x:e.offsetX, y:e.offsetY, id:e.pointerId });
+            pointers.push({ id:e.pointerId, screenX: e.screenX, screenY: e.screenY });
             this.personMenu.classList.add("hidden");
-
-            let mp = {x:e.offsetX, y:e.offsetY};
-            let sp = this.toSVGCoords(mp);
-            let msp = this.fromSVGCoords(sp);
-//            console.log(e);
-//            console.log("TGT: mouse="+JSON.stringify(mp)+" svg="+JSON.stringify(sp)+" mp2="+JSON.stringify(msp));
-//            const target = document.getElementById("target");
-//            target.style.left = msp.x + "px";
-//            target.style.top = msp.y + "px";
         });
         this.svg.addEventListener("pointerup", (e) => {
             if (e.isPrimary) {
@@ -250,50 +241,55 @@ class SlippyTree {
         });
         this.svg.addEventListener("pointermove", (e) => {
             e.preventDefault();
-            let x = e.offsetX;
-            let y = e.offsetY;
-            let oscale = this.scale.scale;
+            // Set dx/dy on pointers, because iOS doesn't have these standard props and e is read-only
+            let pointer;
+            for (const p of pointers) {
+                if (p.id == e.pointerId) {
+                    pointer = p;
+                    p.dx = e.movementX;
+                    p.dy = e.movementY;
+                    if (p.dx === undefined) {
+                        p.dx = p.dy = 0;
+                        if (p.screenX !== undefined) {
+                            p.dx = e.screenX - p.screenX;
+                            p.dy = e.screenY - p.screenY;
+                        }
+                        p.screenX = e.screenX;
+                        p.screenY = e.screenY;
+                    }
+                } else {
+                    p.dx = p.dy = 0;
+                }
+            }
+
             if (pointers.length == 1) {
                 let elt = document.elementFromPoint(e.pageX, e.pageY);
-                if (elt == this.svg) {    // Drag scroll with one finger if over background
-                    console.log(e);
-                    let dx = e.movementX;
-                    let dy = e.movementY;
-                    let ocx = this.scale.cx;
-                    let ocy = this.scale.cy;
-                    let ncx = ocx - dx / oscale;
-                    let ncy = ocy - dy / oscale;
-//                    console.log("MOVE: " + JSON.stringify(pointers)+" dx="+dx+"/"+dy);
-                    this.rescale({cx:ncx, cy:ncy});
-                    pointers[0].x = x;
-                    pointers[0].y = y;
+                if (elt == this.svg) {    // One finger dragging over background: scroll
+                    this.scrollPane.scrollLeft -= pointers[0].dx;
+                    this.scrollPane.scrollTop -= pointers[0].dy;
                 }
             } else if (pointers.length == 2) {
                 for (let i=0;i<pointers.length;i++) {
                     if (pointers[i].id == e.pointerId) {
-                        let ox0 = pointers[0].x;
-                        let oy0 = pointers[0].y;
-                        let ox1 = pointers[1].x;
-                        let oy1 = pointers[1].y;
-                        let nx0 = i==0 ? x : ox0;
-                        let ny0 = i==0 ? y : oy0;
-                        let nx1 = i==1 ? x: ox1;
-                        let ny1 = i==1 ? y: oy1;
+                        let ox0 = pointers[0].screenX;
+                        let oy0 = pointers[0].screenY;
+                        let ox1 = pointers[1].screenX;
+                        let oy1 = pointers[1].screenY;
+                        let nx0 = ox0 + pointers[0].dx;
+                        let ny0 = oy0 + pointers[0].dy;
+                        let nx1 = ox1 + pointers[1].dx;
+                        let ny1 = oy1 + pointers[1].dy;
                         let od = Math.sqrt((ox1-ox0)*(ox1-ox0) + (oy1-oy0)*(oy1-oy0));
                         let nd = Math.sqrt((nx1-nx0)*(nx1-nx0) + (ny1-ny0)*(ny1-ny0));
+                        const oscale = this.scale.scale;
                         let nscale = oscale * nd / od;
-                        let dx = ((nx1-ox1)+(nx0-ox0)) / 2;
-                        let dy = ((ny1-oy1)+(ny0-oy0)) / 2;
+                        let dx = ((nx1-ox1) + (nx0-ox0)) / 2;
+                        let dy = ((ny1-oy1) + (ny0-oy0)) / 2;
                         let ocx = this.scale.cx;
                         let ocy = this.scale.cy;
                         let ncx = ocx - dx / oscale;
                         let ncy = ocy - dy / oscale;
-//                        console.log("old=[["+ox0+" "+oy0+"] ["+ox1+" "+oy1+"]] new=[["+nx0+" "+ny0+"] ["+nx1+" "+ny1+"]] dx=["+dx+" "+dy+"]")
                         this.rescale({scale:nscale, cx:ncx, cy:ncy});
-                        pointers[0].x = nx0;
-                        pointers[0].y = ny0;
-                        pointers[1].x = nx1;
-                        pointers[1].y = ny1;
                     }
                 }
             }
