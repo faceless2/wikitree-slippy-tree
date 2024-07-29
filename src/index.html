@@ -10,22 +10,13 @@
 </head>
 <body>
 
-  <header>
-   <!-- Header is just plumbing not essential to the tree -->
-   <div>
-    <input id="idField" placeholder="WikiTree ID"/>
-    <button id="loadButton">Load</button>
-   </div>
-   <button id="loginButton">Login</button>
-   <button id="logoutButton" class="hidden">Logout</button>
-   <button id="helpButton">?</button>
-  </header>
 
   <main id="slippytree">
    <div id="scrollpane"></div>
    <!-- PersonMenu can be declared anywhere - it will be moved.
         Should have children with "data-action" set to the action to call on the person
    -->
+   <a id="helpButton"></a>
    <div id="personMenu" class="hidden">
      <div class="output-name text-selectable"></div>
      <div data-action="focus">Focus</div>
@@ -134,13 +125,18 @@
 
      <p>
       A multi-root tree showing several parent and child relationships at once.<br/>
-      This tree requires a <b>focus</b>: spouses and siblings are
-      displayed relative to that focus, and refocusing will change the order.
+      Spouses are displayed together, refocus to change the order.
      </p>
-     <p>
-      Source: <a href="https://github.com/faceless2/wikitree-slippy-tree">https://github.com/faceless2/wikitree-slippy-tree</a>
-     </p>
+   <div style="margin: 1em">
+    <input id="idField" placeholder="WikiTree ID"/>
+    <button id="loadButton">Load Tree</button>
+   </div>
+   <div class="footer">
+    <div style="float:left">
+     <a href="https://github.com/faceless2/wikitree-slippy-tree">Source code</code>
     </div>
+    <a href="#" style="float:right" id="loginButton">Login</a>
+   </div>
    </div>
   </main>
 </body>

@@ -24,7 +24,6 @@ function initialize(svg) {
     const idField = document.getElementById("idField");
     const loadButton = document.getElementById("loadButton");
     const loginButton = document.getElementById("loginButton");
-    const logoutButton = document.getElementById("logoutButton");
     const helpButton = document.getElementById("helpButton");
     const helpContainer = document.getElementById("helpContainer");
 
@@ -47,10 +46,34 @@ function initialize(svg) {
         helpContainer.classList.remove("hidden");
     });
     helpContainer.addEventListener("click", (e) => {
-        helpContainer.classList.add("hidden");
+        let elt = document.elementFromPoint(e.pageX, e.pageY);
+        let tag = elt.nodeName;
+        if (tag != "INPUT" && tag != "BUTTON" && tag != "A") {
+            helpContainer.classList.add("hidden");
+        }
     });
-    loginButton.addEventListener("click", (e) => { login(true); });
-    logoutButton.addEventListener("click", (e) => { login(false); });
+    loginButton.addEventListener("click", (e) => {
+        if (getCookie("userName")) {
+            login(false);
+        } else {
+            login(true);
+        }
+    });
+    const resizeHelp = function() {
+        const helpInner = helpContainer.firstElementChild;
+        let scale = Math.min(window.innerWidth / helpInner.clientWidth, window.innerHeight / helpInner.clientHeight);
+        if (scale < 1) {
+            helpInner.style.transform = "scale(" + scale + ", " + scale + ")";
+        } else {
+            delete helpInner.style.transform;
+        }
+    };
+    window.addEventListener("resize", resizeHelp);
+    window.addEventListener("orientationchange", resizeHelp);
+    if (screen && screen.orientation) {
+        screen.orientation.addEventListener("change", resizeHelp);
+    }
+    resizeHelp();
 
     let key = new URLSearchParams(window.location.search).get("key");
     if (key) {
@@ -74,7 +97,6 @@ function getCookie(key) {
  */
 function login(flag) {
     const loginButton = document.getElementById("loginButton");
-    const logoutButton = document.getElementById("logoutButton");
     const idField = document.getElementById("idField");
     if (flag === true) {
         let url = window.location.toString().replace(/\?.*/, "");
@@ -95,16 +117,18 @@ function login(flag) {
     }
     const postLogin = () => {
         let username = getCookie("userName");
+        document.querySelectorAll(".wikitree-username").forEach((e) => {
+            e.innerHTML = username;
+        });
         if (username) {
-            loginButton.classList.add("hidden");
-            logoutButton.classList.remove("hidden");
-            logoutButton.innerHTML = "Logout " + username;
+            loginButton.innerHTML = "Logout " + username;
+            loginButton.setAttribute("data-loggedin", "true");
             if (idField.value.length == 0) {
                 idField.value = username;
             }
         } else {
-            loginButton.classList.remove("hidden");
-            logoutButton.classList.add("hidden");
+            loginButton.innerHTML = "Login";
+            loginButton.removeAttribute("data-loggedin");
             if (idField.value.length == 0) {
                 idField.value = DEMOID;
             }
@@ -317,6 +341,7 @@ class SlippyTree {
      * @param id the id to load, or null to just clear the tree.
      */
     reset(id) {
+        this.view = {scale:1, cx:0, cy:0};
         this.people.length = 0;
         Object.keys(this.byid).forEach(key => delete this.byid[key]);
         this.focus = this.#refocusStart = this.#refocusEnd = null;
@@ -371,7 +396,6 @@ class SlippyTree {
                     this.personMenu.classList.add("hidden");
                 }
             }
-            console.log("PADy1="+this.view.pady1+" "+this.personMenu.previousClientHeight);
             this.view.pady1 = Math.max(this.view.pady1, this.personMenu.previousClientHeight + 40);
             svg.style.paddingLeft   = this.view.padx0 + "px";
             svg.style.paddingRight  = this.view.padx1 + "px";
