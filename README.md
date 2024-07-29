@@ -9,7 +9,7 @@ A ''slippy'' tree for Wikitree. Drag to scroll, pinch to zoom.
 * Modern JS and CSS, with comments. No dependencies. Should be easy to reuse/repurpose.
 
 ## Tree layout
-Laying out a multi-root tree is not a well-understood problem. After a few goes the approach I took was
+Laying out a multi-root tree is not a well-understood problem. After quite a few attempts, the approach I settled on was:
 1. Identify a "focus" node. Do we group a person with their spouse or their siblings? A focus lets us decide. Start at the focus, assign it generation 0, then add their spouses (same generation), parents and siblings, then continue to expand outwards the same way. This gives us an ordered list of nodes and a generation for each node.
 2. For each node in that order, identify its roots by traversing up the tree. Continue with every other node in the ordered list, adding any unseen roots.
 3. For each root node in the root list, position the tree:
