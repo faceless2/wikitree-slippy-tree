@@ -2,38 +2,33 @@
 <html lang="en" xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex, nofollow" />
   <title>Mike's Slippy Tree</title>
   <script src="script.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?">
 </head>
 <body>
   <header>
    <div>
-    <p>Load:<p>
     <input id="idField" placeholder="WikiTree ID"/>
     <button id="loadButton">Load</button>
    </div>
-   <div>
-    <button id="expandButton" disabled>Expand</button>
-    <p>Scale:<p>
-    <input id="scaleSlider" disabled type="range" step="any" min="50" max="250" value="100">
-   </div>
    <button id="loginButton">Login</button>
    <button id="logoutButton" class="hidden">Logout</button>
-   <button id="helpButton">Help</button>
+   <button id="helpButton">?</button>
   </header>
 
   <main id="slippytree">
-   <div id="scrollpane"></div>
+   <div id="scrollpane"><div id="target"></div></div>
   
   <div id="personmenu" class="hidden">
-   <div data-action="up-5">-5</div>
-   <div data-action="up-3">-3</div>
-   <div data-action="prune">&#x2702;</div>
-   <div data-action="down-3">+3</div>
-   <div data-action="down-5">+3</div>
+   <div class="output-name text-selectable"></div>
+   <div data-action="nuclear">Load Family</div>
+   <div data-action="ancestors">Load Ancestors</div>
+   <div data-action="descendants">Load Descendants</div>
+   <div data-action="prune">Prune to this branch</div>
   </div>
 
    <div id="helpContainer">
@@ -44,39 +39,62 @@
       not a tree. The graph requires a <b>focus</b>: spouses and siblings are
       displayed relative to that focus, and a change in focus will change the order.
      </p>
+
+     <div style="display:flex; justify-content: space-between; padding: 0" class="slippy-tree">
+      <svg class="people focus" width="100" height="20">
+       <g class="male">
+       <rect width="100%" height="18"/>
+       <text x="50" y="13" textAnchor="middle">Male</text>
+       </g>
+      </svg>
+      <svg class="people focus" width="100" height="20">
+       <g class="female member">
+       <rect width="100%" height="18"/>
+       <path d="M 0 0 L 12 0 0 12 Z"/>
+       <text x="50" y="13" textAnchor="middle">Female Member</text>
+       </g>
+      </svg>
+      <svg class="people focus" width="100" height="20">
+       <g class="male living">
+       <rect width="150" height="18"/>
+       <path d="M 0 0 L 12 0 0 12 Z"/>
+       <text x="50" y="13" textAnchor="middle">Male Living</text>
+       </g>
+      </svg>
+     </div>
+     <!--
      <p>
       People in gray are not fully loaded, so their relationships will be incomplete.
       Click on them to expand the tree around them.
       The <b>Expand</b> button will do this for up to fifty unloaded people closest to the focus node.
      </p>
+     -->
      <p>
       Relationships are blue/red to a father/mother, with line thickness showing
       certainty: DNA confirmed are the thickest, with uncertain relationships shown
       as a dotted line
      </p>
-     <p>
-      Source: <a href="https://github.com/faceless2/wikitree-slippy-tree">https://github.com/faceless2/wikitree-slippy-tree</a>
-     </p>
      <div style="display:flex; justify-content: space-between; padding: 0" class="slippy-tree">
-      <svg class="relations focus" width="150" height="40">
+      <svg class="relations focus" width="100" height="40">
        <line x1="0" y1="10" x2="150" y2="10" class="focus father dna"/>
-       <text x="75" y="35" textAnchor="middle">Father (DNA confirmed)</text>
+       <text x="50" y="35" textAnchor="middle">Father (DNA confirmed)</text>
       </svg>
-      <svg class="relations focus" width="150" height="40">
+      <svg class="relations focus" width="100" height="40">
        <line x1="0" y1="10" x2="150" y2="10" class="focus mother confident"/>
-       <text x="75" y="35" textAnchor="middle">Mother (confident)</text>
+       <text x="50" y="35" textAnchor="middle">Mother (confident)</text>
       </svg>
-      <svg class="relations focus" width="150" height="40">
+      <svg class="relations focus" width="100" height="40">
        <line x1="0" y1="10" x2="150" y2="10" class="focus nonbiological"/>
-       <text x="75" y="35" textAnchor="middle">Non-biological link</text>
+       <text x="50" y="35" textAnchor="middle">Non-biological link</text>
       </svg>
-      <svg class="relations focus" width="150" height="40">
+      <svg class="relations focus" width="100" height="40">
        <line x1="0" y1="10" x2="150" y2="10" class="focus father uncertain"/>
-       <text x="75" y="35" textAnchor="middle">Father (uncertain)</text>
+       <text x="50" y="35" textAnchor="middle">Father (uncertain)</text>
       </svg>
      </div>
-     <p style="text-align: center; padding-top:2em">
-      <b>Click this window to close</b>
+
+     <p>
+      Source: <a href="https://github.com/faceless2/wikitree-slippy-tree">https://github.com/faceless2/wikitree-slippy-tree</a>
      </p>
     </div>
    </div>
