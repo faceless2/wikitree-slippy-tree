@@ -108,6 +108,7 @@ h1 {
     --father:  blue;
     --neutral: #8C8;
     --marriage: #181;
+    --coparent: none;
     --header: 50px;
     --living: #6c6;
     --member: #ebba34;
@@ -188,6 +189,8 @@ h1 {
 .slippy-tree .relations .father                 { stroke: var(--father); }
 .slippy-tree .relations .marriage               { stroke: var(--marriage); stroke-width: 2px; opacity: 0.3; }
 .slippy-tree .relations .marriage.focus         { opacity: 0.6; }
+.slippy-tree .relations .coparent               { stroke: var(--coparent); stroke-width: 2px; opacity: 0.3; stroke-dasharray: 2px; }
+.slippy-tree .relations .coparent.focus         { opacity: 0.6; }
 .slippy-tree .relations .dna                    { stroke-width: 16px; }
 .slippy-tree .relations .confident              { stroke-width: 8px; }
 .slippy-tree .relations .nonbiological          { stroke: var(--neutral); }

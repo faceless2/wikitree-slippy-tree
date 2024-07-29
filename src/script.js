@@ -29,7 +29,7 @@ function initialize(svg) {
     const helpContainer = document.getElementById("helpContainer");
 
     idField.addEventListener("change", (e) => {
-        loadButton.disabled = e.target.trim().length == 0;
+        loadButton.disabled = e.target.value.trim().length == 0;
     });
     idField.addEventListener("keypress", (e) => {
         loadButton.disabled = e.target.value.trim().length == 0;
@@ -563,7 +563,11 @@ class SlippyTree {
                     } else if (r.rel == "spouse" && person.layout.spouses && person.layout.spouses.includes(r.person)) {
                         path = document.createElementNS(SVG, "path");
                         path.setAttribute("id", "edge-" + r.person.id + "-" + person.id);
-                        path.classList.add("marriage");
+                        if (r.type == "inferred") {
+                            path.classList.add("coparent");
+                        } else {
+                            path.classList.add("marriage");
+                        }
                     }
                     if (path) {
                         if (r.type) {
@@ -1035,7 +1039,7 @@ class SlippyTree {
             const p0 = path.person0;
             const p1 = path.person1;
             let px0, py0, px1, py1, px2, py2, px3, py3;
-            if (path.classList.contains("marriage")) {
+            if (path.classList.contains("marriage") || path.classList.contains("coparent")) {
                 px0 = Math.round(p0.cx) + p0.genwidth * -0.5 + 2;
                 py0 = Math.round(p0.cy) + p0.height   * 0.5;
                 px3 = Math.round(p1.cx) + p1.genwidth * -0.5;
@@ -1376,7 +1380,7 @@ class Person {
         for (let i=0;i<this.relations.length;i++) {
             const r = this.relations[i];
             if (r.person == person && r.rel == rel) {
-                if (date && (r.date != date || r.type != type) && (!r.date || type != "inferred" || date < r.date)) {
+                if ((r.date != date || r.type != type) && (type != "inferred" || date < r.date)) {
                     r.date = date;
                     r.type = type;
                     changed = true;
