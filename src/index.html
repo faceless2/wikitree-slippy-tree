@@ -6,11 +6,12 @@
   <meta name="robots" content="noindex, nofollow" />
   <title>The Slippy Tree</title>
   <script src="script.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <link rel="stylesheet" href="style.css?">
 </head>
 <body>
+
   <header>
+   <!-- Header is just plumbing not essential to the tree -->
    <div>
     <input id="idField" placeholder="WikiTree ID"/>
     <button id="loadButton">Load</button>
@@ -22,6 +23,9 @@
 
   <main id="slippytree">
    <div id="scrollpane"></div>
+   <!-- PersonMenu can be declared anywhere - it will be moved.
+        Should have children with "data-action" set to the action to call on the person
+   -->
    <div id="personMenu" class="hidden">
      <div class="output-name text-selectable"></div>
      <div data-action="focus">Focus</div>

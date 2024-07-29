@@ -10,12 +10,12 @@ const MINSCALE = 0.5, MAXSCALE = 2.5;
  * This is the entry point
  */
 function initialize(svg) {
+    // Create a tree with some default settings
     const tree = new SlippyTree({
         element: "#scrollpane",
         menu: "#personMenu",
-        refocusOnClick: false,
-        dragScrollReversed: true,
-        viewProfileTarget: "_blank",
+        dragScrollReversed: false,
+        profileTarget: "_blank"
     });
     window.tree = tree;
 
@@ -40,11 +40,8 @@ function initialize(svg) {
     });
     loadButton.addEventListener("click", (e) => {
         helpContainer.classList.add("hidden");
-        let key = idField.value.trim();
-        tree.reset();
-        tree.load({keys:key,nuclear:1}, () => {
-            tree.refocus(tree.byid[key]);
-        });
+        let id = idField.value.trim();
+        tree.reset(id);
     });
     helpButton.addEventListener("click", (e) => {
         helpContainer.classList.remove("hidden");
@@ -60,16 +57,6 @@ function initialize(svg) {
         id.value = key.trim();
         loadButton.click();
     }
-}
-
-/**
- * Evalate a CSS length in a specific context.
- * @param style the style
- * @param length the length value, eg "8px"
- */
-function evalLength(style, length) {
-    // Cheat. Just do pixels for now
-    return length.replace(/px$/, "") * 1;
 }
 
 function setCookie(key, value, expiry) {
@@ -174,13 +161,26 @@ function login(flag) {
 
 class SlippyTree {
 
+    #refocusStart;
+    #refocusEnd;
+
+    /**
+     * Props is a map with the following keys
+     *  - element: the element (or selector to find the element) that will contain the map. Must be relative or absolute positioned,
+     *    should be a block element and should have overflow:scrollable. Required.
+     *  - menu: the element (or selector to find it) of an absolutely-positioned element containing the popup menu
+     *          that will be displayed on a person when clicked. Required.
+     *  - trackpad: if true, the mousewheel is identified a trackpad, if false it's a mouse. Optional, will auto-detect by default
+     *  - profileTarget: the target for any links to profiles, eg "_blank". Optional
+     *  - dragScrollReversed: set to true to inverse the way drag-scrolling works. Optional.
+     */
     constructor(props) {
         this.props = props;
         this.scrollPane = typeof props.element == "string" ? document.querySelector(props.element) : props.element;
         this.personMenu = typeof props.menu == "string" ? document.querySelector(props.menu) : props.menu;
-//        while (this.scrollPane.firstChild) {
-//            this.scrollPane.firstChild.remove();
-//        }
+        while (this.scrollPane.firstChild) {
+            this.scrollPane.firstChild.remove();
+        }
         if (this.personMenu) {
             this.scrollPane.appendChild(this.personMenu);
             for (let elt of this.personMenu.querySelectorAll("[data-action]")) {
@@ -213,10 +213,11 @@ class SlippyTree {
         this.byid = {};
         this.view = {scale: 1, cx:0, cy: 0};
         this.focus = null;
-        this.refocusStart = null;
-        this.refocusEnd = null;
+        this.#refocusStart = null;
+        this.#refocusEnd = null;
 
 
+        // All the mouse/scroll events are here
         const pointers = [];
         this.svg.addEventListener("pointerdown", (e) => {
             pointers.push({ id:e.pointerId, screenX: e.screenX, screenY: e.screenY });
@@ -294,8 +295,8 @@ class SlippyTree {
                 if (e.ctrlKey) {
                     view.scale -= e.deltaY * 0.01;
                 } else {
-                    view.cx += e.deltaX / view.scale * (this.dragScrollReversed ? -1 : 1);
-                    view.cy += e.deltaY / view.scale * (this.dragScrollReversed ? -1 : 1);
+                    view.cx += e.deltaX / view.scale * (this.props.dragScrollReversed ? -1 : 1);
+                    view.cy += e.deltaY / view.scale * (this.props.dragScrollReversed ? -1 : 1);
                 }
             } else {
                 view.scale -= e.deltaY * 0.01;
@@ -311,24 +312,30 @@ class SlippyTree {
         });
     }
 
-    toSVGCoords(point) {
-        let x = point.x;
-        let y = point.y;
-        x = ((x - this.view.padx0) / this.view.scale) + this.view.x0;
-        y = ((y - this.view.pady0) / this.view.scale) + this.view.y0;
-        return {x:x, y:y};
+    /**
+     * Remove all nodes, start again
+     * @param id the id to load, or null to just clear the tree.
+     */
+    reset(id) {
+        this.people.length = 0;
+        Object.keys(this.byid).forEach(key => delete this.byid[key]);
+        this.focus = this.#refocusStart = this.#refocusEnd = null;
+        // Clearing is a bit ad-hoc
+        const container = this.svg.firstChild;
+        for (let n=container.firstChild;n;n=n.nextSibling) {
+            while (n.firstChild) {
+                n.firstChild.remove();
+            }
+        }
+        if (id) {
+            tree.load({keys:id, nuclear:1}, () => {
+                tree.refocus(tree.byid[id]);
+            });
+        }
     }
-    fromSVGCoords(point) {
-        let x = point.x;
-        let y = point.y;
-        x = (x - this.view.x0) * this.view.scale + this.view.padx0;
-        y = (y - this.view.y0) * this.view.scale + this.view.pady0;
-        return {x:x, y:y};
-    }
-
 
     /**
-     * Scale or SVG has been adjusted, resize
+     * Reposition the SVG. Expects a map with properties including scale, cx and cy (center logical coordinates0
      * @param props a map to merge over the current scale map
      */
     reposition(m) {
@@ -388,22 +395,12 @@ class SlippyTree {
     }
 
     /**
-     * Remove all nodes, start again
+     * Show the popup menu
+     * @param person the person the menu relates to
+     * @param e the mouse event that triggered the menu
      */
-    reset() {
-        this.people.length = 0;
-        Object.keys(this.byid).forEach(key => delete this.byid[key]);
-        this.focus = this.refocusStart = this.refocusEnd = null;
-        // Bit add-hoc this
-        const container = this.svg.firstChild;
-        for (let n=container.firstChild;n;n=n.nextSibling) {
-            while (n.firstChild) {
-                n.firstChild.remove();
-            }
-        }
-    }
-
     showMenu(person, e) {
+        // Note both person and e can be missing to reposition the currently displayed menu
         if (!person) {
             person = this.personMenu.person;
         }
@@ -421,8 +418,8 @@ class SlippyTree {
             });
             document.querySelectorAll("[data-action=\"profile\"]").forEach((e) => {
                 // Do this to avoid issues with popup blockers if target=_blank
-                if (this.props.viewProfileTarget) {
-                    e.target = this.props.viewProfileTarget;
+                if (this.props.profileTarget) {
+                    e.target = this.props.profileTarget;
                 }
                 e.href = "https://www.wikitree.com/wiki/" + person.data.Name;
             });
@@ -441,11 +438,14 @@ class SlippyTree {
     }
 
     /**
-     * Called when new nodes added to the tree
-     * @param focus an optional person to position the nodes on
+     * Refocus the tree
+     * @param focus the person to focus the tree on. Required
+     * @param callback an optional method to call when focus completes
      */
-    rebuild(focus) {
-        // Ensure every person has an SVG, calculate width/height
+    refocus(focus, callback) {
+        console.log("Focus " + focus);
+
+        // Setup: ensure every person has an SVG
         for (const person of this.people) {
             if (!person.svg && !person.isHidden()) {
                 let rect, path;
@@ -486,10 +486,10 @@ class SlippyTree {
                     let bbox = text.getBBox();
                     // NOTE: this is a hack to let us style with CSS. margin is not an SVG property
                     const style = getComputedStyle(text);
-                    const pt = evalLength(style, style.marginTop);
-                    const pr = evalLength(style, style.marginRight);
-                    const pb = evalLength(style, style.marginBottom);
-                    const pl = evalLength(style, style.marginLeft);
+                    const pt = this.#evalLength(style, style.marginTop);
+                    const pr = this.#evalLength(style, style.marginRight);
+                    const pb = this.#evalLength(style, style.marginBottom);
+                    const pl = this.#evalLength(style, style.marginLeft);
                     person.width = Math.ceil(bbox.width + pl + pr);
                     person.height = Math.ceil(bbox.height + pt + pb);
                     text.setAttribute("y", Math.round(pt + (person.height - pb - pt) * 0.8));
@@ -508,14 +508,7 @@ class SlippyTree {
                 }
             }
         }
-    }
 
-    /**
-     * Called when focal node has changed
-     */
-    refocus(focus, callback) {
-        this.rebuild(focus);
-        console.log("Focus " + focus);
         const peoplepane = this.svg.querySelector(".people");
         const edges = this.svg.querySelector(".relations");
         const labels = this.svg.querySelector(".labels");
@@ -526,7 +519,7 @@ class SlippyTree {
         let ordered = this.order(focus, this.people);
         this.placeNodes(focus, ordered);
 
-        // Re-add people to SVG in priority order, and recreate edges.
+        // Re-add edges, people, labels in priority order
         while (edges.firstChild) {
             edges.firstChild.remove();
         }
@@ -614,8 +607,8 @@ class SlippyTree {
         for (let path of focusedges) {
             edges.appendChild(path);        // Focused edges go last
         }
-        this.refocusStart = Date.now();          // Begin our animation
-        this.refocusEnd = Date.now() + 1000;
+        this.#refocusStart = Date.now();          // Begin our animation
+        this.#refocusEnd = Date.now() + 1000;
         this.focus = focus;
         this.view.cx0 = this.view.cx;
         this.view.cy0 = this.view.cy;
@@ -626,6 +619,8 @@ class SlippyTree {
     /**
      * Sort people into priority order based on focus.
      * Also assigns them to a generation.
+     * @param focus the focal node
+     * @param people the list of people
      */
     order(focus, people) {
         let q = [];
@@ -687,15 +682,17 @@ class SlippyTree {
     }
 
     /**
-     * Position all the nodes.
+     * Position all the nodes. After this method they all have "tx" and "ty" set
+     * @param focus the focal node
+     * @param ordered the ordered array of people in priority order
      */
     placeNodes(focus, ordered) {
         const style = getComputedStyle(this.svg);
-        const MINWIDTH = evalLength(style, style.getPropertyValue("--min-person-width"));
-        const SPOUSEMARGIN = evalLength(style, style.getPropertyValue("--spouse-margin"));
-        const SIBLINGMARGIN = evalLength(style, style.getPropertyValue("--sibling-margin"));
-        const OTHERMARGIN = evalLength(style, style.getPropertyValue("--other-margin"));
-        const GENERATIONMARGIN = evalLength(style, style.getPropertyValue("--generation-margin"));
+        const MINWIDTH = this.#evalLength(style, style.getPropertyValue("--min-person-width"));
+        const SPOUSEMARGIN = this.#evalLength(style, style.getPropertyValue("--spouse-margin"));
+        const SIBLINGMARGIN = this.#evalLength(style, style.getPropertyValue("--sibling-margin"));
+        const OTHERMARGIN = this.#evalLength(style, style.getPropertyValue("--other-margin"));
+        const GENERATIONMARGIN = this.#evalLength(style, style.getPropertyValue("--generation-margin"));
 
         const genpeople = [];
         const genwidth = [];
@@ -988,14 +985,14 @@ class SlippyTree {
     }
 
     /**
-     * Redraw. This is the animation frame
+     * Redraw. This is the animation frame, don't repeat work here
      */
     draw() {
         const edges = this.svg.querySelector(".relations");
         const labels = this.svg.querySelector(".labels");
 
         // T from 0..1 depending on how far through animation we are
-        let t = (Date.now() - this.refocusStart) / (this.refocusEnd - this.refocusStart);
+        let t = (Date.now() - this.#refocusStart) / (this.#refocusEnd - this.#refocusStart);
         if (t < 0) {
             return;
         } else if (t >= 1) {
@@ -1003,7 +1000,7 @@ class SlippyTree {
         } else {
             window.requestAnimationFrame(() => { this.draw() });
         }
-        t = t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2;  // Simple cubic bezier smoothing
+        t = t < 0.5 ? 8 * t * t * t * t : 1 - Math.pow(-2 * t + 2, 4) / 2;  // Simple cubic bezier easing
 
         let x0 = null, x1, y0, y1;
         for (const person of this.people) {
@@ -1143,7 +1140,10 @@ class SlippyTree {
         return date;
     }
 
-
+    /**
+     * Find a person record for the specified ID, creating it if necessary
+     * @param id the numeric id of a person, although a name (eg "Windsor-1") will also work for existing ids
+     */
     find(id) {
         if (typeof id == "number") {
             id = id.toString();
@@ -1161,6 +1161,8 @@ class SlippyTree {
 
     /**
      * Load people.
+     * @param the params to merge over the API call
+     * @param callback the method to call once the people are loaded
      */
     load(params, callback) {
         let usedparams = {
@@ -1240,12 +1242,46 @@ class SlippyTree {
             });
     }
 
+    /**
+     * Convert an {x:n, y:n} with pixel coordinates relative to the SVG element to logical coordinates
+     */
+    toSVGCoords(point) {
+        let x = point.x;
+        let y = point.y;
+        x = ((x - this.view.padx0) / this.view.scale) + this.view.x0;
+        y = ((y - this.view.pady0) / this.view.scale) + this.view.y0;
+        return {x:x, y:y};
+    }
+
+    /**
+     * Convert an {x:n, y:n} with logical coordinates to pixel coordinates relative to the SVG element
+     */
+    fromSVGCoords(point) {
+        let x = point.x;
+        let y = point.y;
+        x = (x - this.view.x0) * this.view.scale + this.view.padx0;
+        y = (y - this.view.y0) * this.view.scale + this.view.pady0;
+        return {x:x, y:y};
+    }
+
+    /**
+     * Evalate a CSS length in a specific context.
+     * @param style the style
+     * @param length the length value, eg "8px"
+     */
+    #evalLength(style, length) {
+        // Cheat. Just do pixels for now
+        return length.replace(/px$/, "") * 1;
+    }
+
 }
 
 /**
- * The Person object. Lots of duplicated fields (and junk) in here, could certainly be trimmed
+ * The Person object.
  */
 class Person {
+    // Duplicated content and probably junk in here, could certainly be trimmed
+
     constructor(tree, index, id) {
         this.tree = tree
         this.index = index;  // local index into array
@@ -1278,27 +1314,18 @@ class Person {
         }
     }
 
+    /**
+     * Should we not display this person?
+     */
     isHidden() {
         return !this.data.Name || this.pruned;
     }
 
+    /**
+     * Is this person loaded? "Loaded" just means we have core details, it doesn't mean we know all its relations
+     */
     isLoaded() {
         return this.data.Name;
-    }
-
-    /**
-     * Return true if the parents, all the children, all the siblings and all the spouses are loaded.
-     */
-    isFullyLoaded() {
-        // It's possible for a node to be loaded without all its children, so we have to set a flag manually
-        if (!this.childrenLoaded) {
-            return false;
-        }
-        for (let r of this.relations) {
-            if (!r.person.isLoaded()) {
-                return false;
-            }
-        }
     }
 
     toString() {
@@ -1416,6 +1443,8 @@ class Person {
         }
     }
 
+    // Iterators for relations
+
     *children() {
         for (const r of this.relations) {
             if (r.rel == "child") {
@@ -1484,20 +1513,31 @@ class Person {
         return out;
     }
 
+    /**
+     * Execute a popupmenu action for this person
+     * @param name the name of the action
+     */
     action(name) {
         console.log("Action " + name + " on " + this);
         if (name == "focus") {
+            // Refocus the tree on this node
             this.tree.refocus(this);
+
         } else if (name == "nuclear") {
+            // Load the "nuclear" family for this node
             this.tree.load({keys: this.id, nuclear:1}, () => { this.tree.refocus(this); });
+
         } else if (name == "ancestors") {
+            // Load 4 (the max) levels of ancestors for this node
             this.tree.load({keys: this.id, ancestors:4}, () => { this.tree.refocus(this); });
+
         } else if (name == "descendants") {
-            // Load descendents...
+            // Load 4 (the max) levels of descendants for this node, and their spouses. Multi stage.
+            // Load ...
             this.tree.load({keys: this.id, descendants:4}, () => {
-                // focus...
+                // ... focus ...
                 this.tree.refocus(this, () => {
-                    // then load their unloaded spouses...
+                    // ... then load their unloaded spouses ...
                     let q = [];
                     q.push(this);
                     const func = function(person) {
@@ -1519,12 +1559,14 @@ class Person {
                         }
                     }
                     this.tree.load({keys: spouses}, () => {
-                        // then focus again
+                        // ... then focus again
                         this.tree.refocus(this);
                     });
                 });
             });
         } else if (name == "prune") {
+            // Mark as pruned any nodes not reachable as a parent,
+            // descendant, or spouse of a descendant
             for (const person of this.tree.people) {
                 person.pruned = false;
             }
