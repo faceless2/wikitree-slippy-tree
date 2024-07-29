@@ -131,6 +131,9 @@ body > #personmenu {
     fill: white;
     stroke: #aaa;
     stroke-width: 1px;
+}
+
+.slippy-tree .people > * {
     cursor: pointer;
 }
 

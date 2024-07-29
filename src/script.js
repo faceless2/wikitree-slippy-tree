@@ -13,7 +13,8 @@ function initialize(svg) {
     const tree = new SlippyTree({
         element: "#scrollpane",
         menu: "#personmenu",
-        refocusOnClick: true
+        refocusOnClick: true,
+        dragScrollReversed: true,
     });
     window.tree = tree;
 
@@ -215,8 +216,8 @@ class SlippyTree {
         this.refocusEnd = null;
 
         this.scrollPane.addEventListener("scroll", () => {
-            this.scale.cx = (this.scrollPane.clientWidth / 2 + this.scrollPane.scrollLeft) / this.scale.scale;
-            this.scale.cy = (this.scrollPane.clientHeight / 2 + this.scrollPane.scrollTop) / this.scale.scale;
+            this.scale.cx = ((this.scrollPane.clientWidth / 2 + this.scrollPane.scrollLeft) / this.scale.scale) + this.scale.x0;
+            this.scale.cy = ((this.scrollPane.clientHeight / 2 + this.scrollPane.scrollTop) / this.scale.scale) + this.scale.y0;
         });
 
         const pointers = [];
@@ -311,8 +312,8 @@ class SlippyTree {
                 if (e.ctrlKey) {
                     scale.scale -= e.deltaY * 0.01;
                 } else {
-                    scale.cx -= e.deltaX / scale.scale;
-                    scale.cy -= e.deltaY / scale.scale;
+                    scale.cx += e.deltaX / scale.scale * (this.dragScrollReversed ? -1 : 1);
+                    scale.cy += e.deltaY / scale.scale * (this.dragScrollReversed ? -1 : 1);
                 }
             } else {
                 scale.scale -= e.deltaY * 0.01;
@@ -329,7 +330,6 @@ class SlippyTree {
         return {x:x, y:y};
     }
     fromSVGCoords(point) {
-        // svg coords 363,56 via  { left: 570.5, scale: 0.95, top: 254.5, x0: -20, y0: -13} map to screen 940px,320px
         let x = point.x;
         let y = point.y;
         x = (x - this.scale.x0) * this.scale.scale + this.scale.left;
@@ -373,8 +373,8 @@ class SlippyTree {
         svg.setAttribute("width", usedWidth);
         svg.setAttribute("height", usedHeight);
 
-        const targetX = Math.round(o.cx * o.scale);
-        const targetY = Math.round(o.cy * o.scale);
+        const targetX = Math.round((o.cx - o.x0) * o.scale);
+        const targetY = Math.round((o.cy - o.y0) * o.scale);
         let x = Math.round(targetX - viewWidth / 2);
         let y = Math.round(targetY - viewHeight / 2);
         scrollpane.scrollLeft = x;
