@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex, nofollow" />
-  <title>Mike's Slippy Tree</title>
+  <title>The Slippy Tree</title>
   <script src="script.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <link rel="stylesheet" href="style.css?">
@@ -21,78 +21,118 @@
   </header>
 
   <main id="slippytree">
-   <div id="scrollpane"><div id="target"></div></div>
-  
-  <div id="personmenu" class="hidden">
-   <div class="output-name text-selectable"></div>
-   <div data-action="nuclear">Load Family</div>
-   <div data-action="ancestors">Load Ancestors</div>
-   <div data-action="descendants">Load Descendants</div>
-   <div data-action="prune">Prune to this branch</div>
-  </div>
+   <div id="scrollpane"></div>
+   <div id="personMenu" class="hidden">
+     <div class="output-name text-selectable"></div>
+     <div data-action="focus">Focus</div>
+     <div data-action="nuclear">Load family</div>
+     <div data-action="ancestors">Load ancestors</div>
+     <div data-action="descendants">Load descendants</div>
+     <div data-action="prune">Prune to this branch</div>
+     <a data-action="profile">View profile</div>
+   </div>
 
    <div id="helpContainer">
     <div>
-     <h1>Mike's Slippy Tree</h1>
-     <p>
-      An experimental interface showing parent and child relationships as a graph,
-      not a tree. The graph requires a <b>focus</b>: spouses and siblings are
-      displayed relative to that focus, and a change in focus will change the order.
-     </p>
+     <h1>The Slippy Tree</h1>
 
-     <div style="display:flex; justify-content: space-between; padding: 0" class="slippy-tree">
-      <svg class="people focus" width="100" height="20">
-       <g class="male">
-       <rect width="100%" height="18"/>
-       <text x="50" y="13" textAnchor="middle">Male</text>
+     <svg class="slippy-tree" width="500" height="140" style="display:block">
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" />
+        </marker>
+      </defs>
+     <g transform="translate(0 20)">
+      <g class="relations">
+       <path class="father" d="M 639 19 C 594 19 594 56 549 56" transform="translate(-239 0)"></path>
+       <path class="father uncertain" d="M 639 59 C 594 59 594 86 549 86" transform="translate(-239 0)"></path>
+       <path class="marriage" d="M 2.5 20 C 2.5 40 2.5 40 10.5 40" transform="translate(-100 0)"></path>
+       <path class="father dna focus" d="M 339 26 C 289.25 26 289.25 10 239.5 10" transform="translate(-139 0)"></path>
+       <path class="mother nonbiological focus" d="M 339 26 C 294.25 26 294.25 40 249.5 40" transform="translate(-139 0)"></path>
+       <path class="marriage focus" d="M 341 36 C 341 56 341 56 349 56" transform="translate(-139 0)"></path>
+       <path class="marriage focus" d="M 341 36 C 341 86 341 86 349 86" transform="translate(-139 0)"></path>
+       <path class="mother confident focus" d="M 639 19 C 589 19 589 26 539 26" transform="translate(-239 0)"></path>
+       <path class="mother focus" d="M 639 59 C 589 59 589 26 539 26" transform="translate(-239 0)"></path>
+      </g>
+      <g class="labels">
+       <text class="marriage focus" x="245" y="41">
+        Marriage Date
+       </text>
+      </g>
+      <g class="people">
+       <g class="female living member focus" transform="translate(200 16)">
+        <rect height="20" width="100"></rect>
+        <path d="M 0 0 H 12 L 0 12 Z"></path>
+        <text y="14" x="50">
+         Focus
+        </text>
        </g>
-      </svg>
-      <svg class="people focus" width="100" height="20">
-       <g class="female member">
-       <rect width="100%" height="18"/>
-       <path d="M 0 0 L 12 0 0 12 Z"/>
-       <text x="50" y="13" textAnchor="middle">Female Member</text>
+       <g class="male spouse" transform="translate(210 46)">
+        <rect height="20" width="100"></rect>
+        <path d="M 0 0 H 12 L 0 12 Z"></path>
+        <text y="14" x="50">
+         First Spouse
+        </text>
        </g>
-      </svg>
-      <svg class="people focus" width="100" height="20">
-       <g class="male living">
-       <rect width="150" height="18"/>
-       <path d="M 0 0 L 12 0 0 12 Z"/>
-       <text x="50" y="13" textAnchor="middle">Male Living</text>
+       <g class="male spouse" transform="translate(210 76)">
+        <rect height="20" width="100"></rect>
+        <path d="M 0 0 H 12 L 0 12 Z"></path>
+        <text y="14" x="50">
+         Second Spouse
+        </text>
        </g>
-      </svg>
-     </div>
-     <!--
-     <p>
-      People in gray are not fully loaded, so their relationships will be incomplete.
-      Click on them to expand the tree around them.
-      The <b>Expand</b> button will do this for up to fifty unloaded people closest to the focus node.
-     </p>
-     -->
-     <p>
-      Relationships are blue/red to a father/mother, with line thickness showing
-      certainty: DNA confirmed are the thickest, with uncertain relationships shown
-      as a dotted line
-     </p>
-     <div style="display:flex; justify-content: space-between; padding: 0" class="slippy-tree">
-      <svg class="relations focus" width="100" height="40">
-       <line x1="0" y1="10" x2="150" y2="10" class="focus father dna"/>
-       <text x="50" y="35" textAnchor="middle">Father (DNA confirmed)</text>
-      </svg>
-      <svg class="relations focus" width="100" height="40">
-       <line x1="0" y1="10" x2="150" y2="10" class="focus mother confident"/>
-       <text x="50" y="35" textAnchor="middle">Mother (confident)</text>
-      </svg>
-      <svg class="relations focus" width="100" height="40">
-       <line x1="0" y1="10" x2="150" y2="10" class="focus nonbiological"/>
-       <text x="50" y="35" textAnchor="middle">Non-biological link</text>
-      </svg>
-      <svg class="relations focus" width="100" height="40">
-       <line x1="0" y1="10" x2="150" y2="10" class="focus father uncertain"/>
-       <text x="50" y="35" textAnchor="middle">Father (uncertain)</text>
-      </svg>
-     </div>
+       <g class="male living" transform="translate(400 9)">
+        <rect height="20" width="100"></rect>
+        <path d="M 0 0 H 12 L 0 12 Z"></path>
+        <text y="14" x="50">
+         Child
+        </text>
+       </g>
+       <g class="male living member privacy-semiopen" transform="translate(400 49)">
+        <rect height="20" width="100"></rect>
+        <path d="M 0 0 H 12 L 0 12 Z"></path>
+        <text y="14" x="50">
+         Child
+        </text>
+       </g>
+       <g class="male" transform="translate(0 0)">
+        <rect height="20" width="100"></rect>
+        <path d="M 0 0 H 12 L 0 12 Z"></path>
+        <text y="14" x="50">
+         Father
+        </text>
+       </g>
+       <g class="female spouse" transform="translate(10 30)">
+        <rect height="20" width="100"></rect>
+        <path d="M 0 0 H 12 L 0 12 Z"></path>
+        <text y="14" x="50">
+         Mother
+        </text>
+       </g>
+      </g>
+      <g class="labels">
+       <path d="M 330 -4 L 350 14" stroke="black" fill="none" marker-end="url(#arrow)"/>
+       <text x="320" y="-6">Mother is confident</text>
+       <path d="M 130 60 L 140 44" stroke="black" fill="none" marker-end="url(#arrow)"/>
+       <text x="130" y="70">Mother is non-biological</text>
+       <path d="M 180 -4 L 160 10" stroke="black" fill="none" marker-end="url(#arrow)"/>
+       <path d="M 165 85 L 197 75" stroke="black" fill="none" marker-end="url(#arrow)"/>
+       <text x="190" y="-6">Father is confirmed with DNA</text>
+       <text x="140" y="90">Marriage</text>
+       <path d="M 350 100 L 340 86" stroke="black" fill="none" marker-end="url(#arrow)"/>
+       <text x="350" y="110">Father is uncertain</text>
+       <path d="M 415 -5 L 410 6" stroke="black" fill="none" marker-end="url(#arrow)"/>
+       <text x="430" y="-8">Living Person</text>
+       <path d="M 420 85 L 407 59" stroke="black" fill="none" marker-end="url(#arrow)"/>
+       <text x="450" y="98">WikiTree Member</text>
+      </g>
+     </g></svg>
 
+     <p>
+      A multi-root tree showing several parent and child relationships at once.<br/>
+      This tree requires a <b>focus</b>: spouses and siblings are
+      displayed relative to that focus, and refocusing will change the order.
+     </p>
      <p>
       Source: <a href="https://github.com/faceless2/wikitree-slippy-tree">https://github.com/faceless2/wikitree-slippy-tree</a>
      </p>

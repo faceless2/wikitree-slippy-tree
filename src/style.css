@@ -59,42 +59,48 @@ h1 {
     background: #0008;
 }
 #helpContainer > div {
-    --width: 600px;
+    text-align: center;
+    --width: 500px;
     left: calc(50% - var(--width));
     margin: 0 10px;
     max-width: var(--width);
     background: white;
     border: 2px solid black;
-    padding: 10px;
+    padding: 15px;
 }
 
 .text-selectable {
     user-select: text !important;
     -webkit-user-select: text !important;
 }
-#personmenu {
+#personMenu {
     position: absolute;
     width: fit-content;
     border: 1px solid black;
     background: white;
     padding: 20px;
-    font-size: 15px;
+    font-size: 16px;
     /*filter: drop-shadow(6px 8px 4px #0008); -- too many rendering failures with this */
     z-index:999;
-
-    > div {
-        padding: 8px;
-    }
-    > div:first-child {
-        color: gray;
-        user-select: text !important;
-    }
-    > div[data-action]:hover {
-        background-color: #CFC;
-    }
+    padding: 8px;
 }
-body > #personmenu {
-    display: none;
+
+#personMenu > * {
+    margin-top: 8px;
+    display: block;
+    color: initial;
+    text-decoration: none;
+}
+
+#personMenu > *:first-child {
+    color: gray;
+    font-style: italic;
+    user-select: text !important;
+    padding-top: 0;
+}
+
+#personMenu > *[data-action]:hover {
+    background-color: #CFC;
 }
 
 .slippy-tree {
