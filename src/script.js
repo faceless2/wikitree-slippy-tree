@@ -202,8 +202,21 @@ class SlippyTree {
         this.props = props;
         this.scrollPane = typeof props.element == "string" ? document.querySelector(props.element) : props.element;
         this.personMenu = typeof props.menu == "string" ? document.querySelector(props.menu) : props.menu;
-        while (this.scrollPane.firstChild) {
-            this.scrollPane.firstChild.remove();
+        this.people = [];
+        this.byid = {};
+        this.view = {scale: 1, cx:0, cy: 0};
+        this.focus = null;
+        this.#refocusStart = null;
+        this.#refocusEnd = null;
+        let trackpad = props.trackpad;
+
+        if (this.scrollPane) {
+            while (this.scrollPane.firstChild) {
+                this.scrollPane.firstChild.remove();
+            }
+        } else if (typeof window != "undefined") {
+            // For local testing, allow with no scrollpane
+            throw new Error("\"element\" unspecified or not found");
         }
         if (this.personMenu) {
             this.scrollPane.appendChild(this.personMenu);
@@ -216,124 +229,117 @@ class SlippyTree {
                 }
             }
         }
-        let trackpad = props.trackpad;
-        this.svg = document.createElementNS(SVG, "svg");
-        this.svg.classList.add("slippy-tree");
-        this.scrollPane.appendChild(this.svg);
-        let container = document.createElementNS(SVG, "g");
-        container.classList.add("container");
-        this.svg.appendChild(container);
-        let n = document.createElementNS(SVG, "g");
-        n.classList.add("relations");
-        container.appendChild(n);
-        n = document.createElementNS(SVG, "g");
-        n.classList.add("labels");
-        container.appendChild(n);
-        n = document.createElementNS(SVG, "g");
-        n.classList.add("people");
-        container.appendChild(n);
+        if (this.scrollPane) {
+            this.svg = document.createElementNS(SVG, "svg");
+            this.svg.classList.add("slippy-tree");
+            this.scrollPane.appendChild(this.svg);
+            let container = document.createElementNS(SVG, "g");
+            container.classList.add("container");
+            this.svg.appendChild(container);
+            let n = document.createElementNS(SVG, "g");
+            n.classList.add("relations");
+            container.appendChild(n);
+            n = document.createElementNS(SVG, "g");
+            n.classList.add("labels");
+            container.appendChild(n);
+            n = document.createElementNS(SVG, "g");
+            n.classList.add("people");
+            container.appendChild(n);
 
-        this.people = [];
-        this.byid = {};
-        this.view = {scale: 1, cx:0, cy: 0};
-        this.focus = null;
-        this.#refocusStart = null;
-        this.#refocusEnd = null;
-
-
-        // All the mouse/scroll events are here
-        const pointers = [];
-        this.svg.addEventListener("pointerdown", (e) => {
-            pointers.push({ id:e.pointerId, screenX: e.screenX, screenY: e.screenY });
-            this.personMenu.classList.add("hidden");
-        });
-        this.svg.addEventListener("pointerup", (e) => {
-            if (e.isPrimary) {
-                pointers.length = 0;
-            } else {
-                for (let i=0;i<pointers.length;i++) {
-                    if (pointers[i].id == e.pointerId) {
-                        pointers.splice(i, 1);
-                    }
-                }
-            }
-        });
-        this.svg.addEventListener("pointermove", (e) => {
-            e.preventDefault();
-            // Set dx/dy on pointers, because iOS doesn't have these standard props and e is read-only
-            for (const p of pointers) {
-                if (p.id == e.pointerId) {
-                    p.dx = e.movementX;
-                    p.dy = e.movementY;
-                    if (p.dx === undefined) {
-                        p.dx = p.dy = 0;
-                        if (p.screenX !== undefined) {
-                            p.dx = e.screenX - p.screenX;
-                            p.dy = e.screenY - p.screenY;
+            // All the mouse/scroll events are here
+            const pointers = [];
+            this.svg.addEventListener("pointerdown", (e) => {
+                pointers.push({ id:e.pointerId, screenX: e.screenX, screenY: e.screenY });
+                this.personMenu.classList.add("hidden");
+            });
+            this.svg.addEventListener("pointerup", (e) => {
+                if (e.isPrimary) {
+                    pointers.length = 0;
+                } else {
+                    for (let i=0;i<pointers.length;i++) {
+                        if (pointers[i].id == e.pointerId) {
+                            pointers.splice(i, 1);
                         }
-                        p.screenX = e.screenX;
-                        p.screenY = e.screenY;
+                    }
+                }
+            });
+            this.svg.addEventListener("pointermove", (e) => {
+                e.preventDefault();
+                // Set dx/dy on pointers, because iOS doesn't have these standard props and e is read-only
+                for (const p of pointers) {
+                    if (p.id == e.pointerId) {
+                        p.dx = e.movementX;
+                        p.dy = e.movementY;
+                        if (p.dx === undefined) {
+                            p.dx = p.dy = 0;
+                            if (p.screenX !== undefined) {
+                                p.dx = e.screenX - p.screenX;
+                                p.dy = e.screenY - p.screenY;
+                            }
+                            p.screenX = e.screenX;
+                            p.screenY = e.screenY;
+                        }
+                    } else {
+                        p.dx = p.dy = 0;
+                    }
+                }
+
+                if (pointers.length == 1) {
+                    let elt = document.elementFromPoint(e.pageX, e.pageY);
+                    if (elt == this.svg) {    // One finger dragging over background: scroll
+                        this.scrollPane.scrollLeft -= pointers[0].dx;
+                        this.scrollPane.scrollTop -= pointers[0].dy;
+                    }
+                } else if (pointers.length == 2) {  // Two fingers: pinch zoom
+                    let ox0 = pointers[0].screenX;
+                    let oy0 = pointers[0].screenY;
+                    let ox1 = pointers[1].screenX;
+                    let oy1 = pointers[1].screenY;
+                    let nx0 = ox0 + pointers[0].dx;
+                    let ny0 = oy0 + pointers[0].dy;
+                    let nx1 = ox1 + pointers[1].dx;
+                    let ny1 = oy1 + pointers[1].dy;
+                    let od = Math.sqrt((ox1-ox0)*(ox1-ox0) + (oy1-oy0)*(oy1-oy0));
+                    let nd = Math.sqrt((nx1-nx0)*(nx1-nx0) + (ny1-ny0)*(ny1-ny0));
+                    const oscale = this.view.scale;
+                    let nscale = oscale * nd / od;
+                    let dx = ((nx1-ox1) + (nx0-ox0)) / 2;
+                    let dy = ((ny1-oy1) + (ny0-oy0)) / 2;
+                    let ncx = this.view.cx - dx / oscale;
+                    let ncy = this.view.cy - dy / oscale;
+                    this.reposition({scale:nscale, cx:ncx, cy:ncy});
+                }
+            });
+            this.svg.addEventListener("wheel", (e) => {
+                // If a trackpad, mousewheel will run in two directions and ctrl-wheel
+                // is used to pinch-zoom. If a normal mousewheel, wheel is used to zoom
+                // and only goes in one direction.
+                // Assume non-trackpad until proved otherwise
+                e.preventDefault();
+                let view = {scale: this.view.scale, cx:this.view.cx, cy:this.view.cy};
+                if (typeof trackpad != "boolean" && (e.deltaX || !Number.isInteger(e.deltaY))) {
+                    trackpad = true;
+                }
+                if (trackpad) {
+                    if (e.ctrlKey) {
+                        view.scale -= e.deltaY * 0.01;
+                    } else {
+                        view.cx += e.deltaX / view.scale * (this.props.dragScrollReversed ? -1 : 1);
+                        view.cy += e.deltaY / view.scale * (this.props.dragScrollReversed ? -1 : 1);
                     }
                 } else {
-                    p.dx = p.dy = 0;
-                }
-            }
-
-            if (pointers.length == 1) {
-                let elt = document.elementFromPoint(e.pageX, e.pageY);
-                if (elt == this.svg) {    // One finger dragging over background: scroll
-                    this.scrollPane.scrollLeft -= pointers[0].dx;
-                    this.scrollPane.scrollTop -= pointers[0].dy;
-                }
-            } else if (pointers.length == 2) {  // Two fingers: pinch zoom
-                let ox0 = pointers[0].screenX;
-                let oy0 = pointers[0].screenY;
-                let ox1 = pointers[1].screenX;
-                let oy1 = pointers[1].screenY;
-                let nx0 = ox0 + pointers[0].dx;
-                let ny0 = oy0 + pointers[0].dy;
-                let nx1 = ox1 + pointers[1].dx;
-                let ny1 = oy1 + pointers[1].dy;
-                let od = Math.sqrt((ox1-ox0)*(ox1-ox0) + (oy1-oy0)*(oy1-oy0));
-                let nd = Math.sqrt((nx1-nx0)*(nx1-nx0) + (ny1-ny0)*(ny1-ny0));
-                const oscale = this.view.scale;
-                let nscale = oscale * nd / od;
-                let dx = ((nx1-ox1) + (nx0-ox0)) / 2;
-                let dy = ((ny1-oy1) + (ny0-oy0)) / 2;
-                let ncx = this.view.cx - dx / oscale;
-                let ncy = this.view.cy - dy / oscale;
-                this.reposition({scale:nscale, cx:ncx, cy:ncy});
-            }
-        });
-        this.svg.addEventListener("wheel", (e) => {
-            // If a trackpad, mousewheel will run in two directions and ctrl-wheel
-            // is used to pinch-zoom. If a normal mousewheel, wheel is used to zoom
-            // and only goes in one direction.
-            // Assume non-trackpad until proved otherwise
-            e.preventDefault();
-            let view = {scale: this.view.scale, cx:this.view.cx, cy:this.view.cy};
-            if (typeof trackpad != "boolean" && (e.deltaX || !Number.isInteger(e.deltaY))) {
-                trackpad = true;
-            }
-            if (trackpad) {
-                if (e.ctrlKey) {
                     view.scale -= e.deltaY * 0.01;
-                } else {
-                    view.cx += e.deltaX / view.scale * (this.props.dragScrollReversed ? -1 : 1);
-                    view.cy += e.deltaY / view.scale * (this.props.dragScrollReversed ? -1 : 1);
                 }
-            } else {
-                view.scale -= e.deltaY * 0.01;
-            }
-            this.reposition(view);
-        });
-        this.scrollPane.addEventListener("scroll", () => {
-            this.view.cx = (((this.scrollPane.clientWidth / 2 + this.scrollPane.scrollLeft) - this.view.padx0) / this.view.scale) + this.view.x0;
-            this.view.cy = (((this.scrollPane.clientHeight / 2 + this.scrollPane.scrollTop) - this.view.pady0) / this.view.scale) + this.view.y0;
-        });
-        window.addEventListener("resize", (e) => { 
-            tree.reposition({});
-        });
+                this.reposition(view);
+            });
+            this.scrollPane.addEventListener("scroll", () => {
+                this.view.cx = (((this.scrollPane.clientWidth / 2 + this.scrollPane.scrollLeft) - this.view.padx0) / this.view.scale) + this.view.x0;
+                this.view.cy = (((this.scrollPane.clientHeight / 2 + this.scrollPane.scrollTop) - this.view.pady0) / this.view.scale) + this.view.y0;
+            });
+            window.addEventListener("resize", (e) => { 
+                tree.reposition({});
+            });
+        }
     }
 
     /**
@@ -375,8 +381,6 @@ class SlippyTree {
             }
         }
         this.view.scale = Math.max(MINSCALE, Math.min(MAXSCALE, this.view.scale));
-        const scrollpane = this.scrollPane;
-        const svg = this.svg;
         const targetWidth  = Math.round((this.view.x1 - this.view.x0) * this.view.scale);
         const targetHeight = Math.round((this.view.y1 - this.view.y0) * this.view.scale);
         const viewWidth = this.scrollPane.clientWidth;
@@ -397,21 +401,21 @@ class SlippyTree {
                 }
             }
             this.view.pady1 = Math.max(this.view.pady1, this.personMenu.previousClientHeight + 40);
-            svg.style.paddingLeft   = this.view.padx0 + "px";
-            svg.style.paddingRight  = this.view.padx1 + "px";
-            svg.style.paddingTop    = this.view.pady0 + "px";
-            svg.style.paddingBottom = this.view.pady1 + "px";
+            this.svg.style.paddingLeft   = this.view.padx0 + "px";
+            this.svg.style.paddingRight  = this.view.padx1 + "px";
+            this.svg.style.paddingTop    = this.view.pady0 + "px";
+            this.svg.style.paddingBottom = this.view.pady1 + "px";
         }
         let tran = "scale(" + this.view.scale + " " + this.view.scale + ") ";
         tran += "translate(" + (-this.view.x0) + " " + (-this.view.y0) + ")";
-        svg.querySelector(".container").setAttribute("transform", tran);
-        svg.setAttribute("width", targetWidth);
-        svg.setAttribute("height", targetHeight);
+        this.svg.querySelector(".container").setAttribute("transform", tran);
+        this.svg.setAttribute("width", targetWidth);
+        this.svg.setAttribute("height", targetHeight);
 
         const targetX = Math.round((this.view.cx - this.view.x0) * this.view.scale) + this.view.padx0;
         const targetY = Math.round((this.view.cy - this.view.y0) * this.view.scale) + this.view.pady0;
-        scrollpane.scrollLeft = Math.round(targetX - viewWidth / 2);
-        scrollpane.scrollTop  = Math.round(targetY - viewHeight / 2);
+        this.scrollPane.scrollLeft = Math.round(targetX - viewWidth / 2);
+        this.scrollPane.scrollTop  = Math.round(targetY - viewHeight / 2);
 //        console.log("RESCALE: scale="+JSON.stringify(o)+" target=["+targetWidth+" "+targetHeight+"] view=["+viewWidth+" "+viewHeight+"] center=["+targetX+" "+targetY+"] tr="+tran+" sp="+x+" "+y);
         if (!this.personMenu.classList.contains("hidden")) {
             this.showMenu();
@@ -471,7 +475,10 @@ class SlippyTree {
 
         // Setup: ensure every person has an SVG
         for (const person of this.people) {
-            if (!person.svg && !person.isHidden()) {
+            if (!this.svg) {
+                person.width = 100; // Dummy value for layout testing
+                person.height = 20;
+            } else if (!person.svg && !person.isHidden()) {
                 let rect, path;
                 person.svg = document.createElementNS(SVG, "g");
                 person.svg.person = person;
@@ -533,10 +540,6 @@ class SlippyTree {
             }
         }
 
-        const peoplepane = this.svg.querySelector(".people");
-        const edges = this.svg.querySelector(".relations");
-        const labels = this.svg.querySelector(".labels");
-
         // First sort people into priority, then
         // position based on focus node and priority
         // After this each person has "tx" and "ty" value set
@@ -544,6 +547,9 @@ class SlippyTree {
         this.placeNodes(focus, ordered);
 
         // Re-add edges, people, labels in priority order
+        const peoplepane = this.svg.querySelector(".people");
+        const edges = this.svg.querySelector(".relations");
+        const labels = this.svg.querySelector(".labels");
         while (edges.firstChild) {
             edges.firstChild.remove();
         }
@@ -652,12 +658,13 @@ class SlippyTree {
         // Nodes are hidden if they have no name
         // Everything is hidden unless reachable from a non-hidden node
         // Possible for nephews to marry aunts, etc, so even generations need a focus.
+        for (const person of people) {
+            person.hidden = true;
+            person.ty = person.tx = person.generation = NaN;
+        }
         q.push(focus);
         focus.generation = 0;
         let mingen = 0;
-        for (const person of people) {
-            person.hidden = true;
-        }
         for (let i=0;i<q.length;i++) {
             const person = q[i];
             person.hidden = false;
@@ -712,16 +719,19 @@ class SlippyTree {
      * @param ordered the ordered array of people in priority order
      */
     placeNodes(focus, ordered) {
-        const style = getComputedStyle(this.svg);
-        const MINWIDTH = this.#evalLength(style, style.getPropertyValue("--min-person-width"));
-        const SPOUSEMARGIN = this.#evalLength(style, style.getPropertyValue("--spouse-margin"));
-        const SIBLINGMARGIN = this.#evalLength(style, style.getPropertyValue("--sibling-margin"));
-        const OTHERMARGIN = this.#evalLength(style, style.getPropertyValue("--other-margin"));
-        const GENERATIONMARGIN = this.#evalLength(style, style.getPropertyValue("--generation-margin"));
+        const style = this.svg ? getComputedStyle(this.svg) : null;
+        const MINWIDTH = style ? this.#evalLength(style, style.getPropertyValue("--min-person-width")) : 50;
+        const SPOUSEMARGIN = style ? this.#evalLength(style, style.getPropertyValue("--spouse-margin")) : 10;
+        const SIBLINGMARGIN = style ? this.#evalLength(style, style.getPropertyValue("--sibling-margin")) : 20;
+        const OTHERMARGIN = style ? this.#evalLength(style, style.getPropertyValue("--other-margin")) : 40;
+        const GENERATIONMARGIN = style ? this.#evalLength(style, style.getPropertyValue("--generation-margin")) : 100;
+        const PASSES = 1000;
+        const ITERATIONS = 10;
+        const DEBUG = false; // typeof window == "undefined";
 
         const genpeople = [];
         const genwidth = [];
-        const forces = [];
+        const forces = [];       // includes func(d) where d is vertical distance from primary to secondary (may be -ve), and ret is +ve to bring closer together
         const q = []; // tmp working aray
 
         // STEP 0
@@ -787,18 +797,20 @@ class SlippyTree {
             for (let j=1;j<=person.generation;j++) {
                 person.tx += (genwidth[j - 1] + genwidth[j]) / 2 + GENERATIONMARGIN;
             }
-            let rect = person.svg.querySelector("rect");
-            rect.setAttribute("width", person.genwidth);
-            for (let text of person.svg.querySelectorAll("text")) {
-                text.setAttribute("x", Math.round(person.genwidth / 2));
-            }
-            person.svg.classList.toggle("focus", person == focus);
-            person.svg.classList.toggle("pending", !person.isLoaded());
-            person.svg.classList.remove("spouse");
             for (const par of person.parents()) {
                 if (!par.hidden) {
-                    forces.push({name: "child", a: par, b: person});
+                    forces.push({name: "child", a: par, b: person, iterations:1, func: (d) => Math.abs(d) < 1 ? Math.abs(d) : Math.log(Math.abs(d) - 1) });
                 }
+            }
+            if (person.svg) {
+                let rect = person.svg.querySelector("rect");
+                rect.setAttribute("width", person.genwidth);
+                for (let text of person.svg.querySelectorAll("text")) {
+                    text.setAttribute("x", Math.round(person.genwidth / 2));
+                }
+                person.svg.classList.toggle("focus", person == focus);
+                person.svg.classList.toggle("pending", !person.isLoaded());
+                person.svg.classList.remove("spouse");
             }
         }
 
@@ -813,6 +825,7 @@ class SlippyTree {
         // The end result of this is a valid layout, no overlaps, but everything is squished
         // towards the top of each column.
         //
+        let maxy = 0;
         const func = function(owner, person) {
             if (person.hidden) {
                 return null;
@@ -830,7 +843,9 @@ class SlippyTree {
                 for (const spouse of person.spouses()) {
                     if (!spouse.hidden && spouse.generation == generation && !genpeople[generation].includes(spouse)) {
                         genpeople[generation].push(spouse);
-                        spouse.svg.classList.add("spouse");
+                        if (spouse.svg) {
+                            spouse.svg.classList.add("spouse");
+                        }
                         spouse.tx += 10;
                         mylast = spouse;
                         person.layout.spouses.push(spouse);
@@ -854,7 +869,6 @@ class SlippyTree {
                 let y = NaN;
                 if (prev) { // Y value depends on previous element
                     let rel = person.relationshipName(prev);
-                    y = OTHERMARGIN;
                     if (rel == "spouse" || rel == "spouse-spouse") {
                         y = SPOUSEMARGIN;
                         rel = "spouse";
@@ -862,9 +876,23 @@ class SlippyTree {
                         y = SIBLINGMARGIN;
                         rel = "sibling";
                     } else {
+                        y = OTHERMARGIN;
                         rel = null;
                     }
                     y += (prev.height + person.height) / 2;
+                    forces.push({
+                      name: rel ? rel : "other",
+                      a: person,
+                      b: prev,
+                      iterations: ITERATIONS,
+                      func: ((y) => {
+                          if (rel == "spouse") {
+                              return (d) => d - y;
+                          } else {
+                              return (d) => Math.min(0, d - y); // return -ve value to push apart
+                          }
+                      })(y)
+                    });
                     person.layout.prev = prev;
                     prev.layout.next = person;
                     person.layout.prevMargin = prev.layout.nextMargin = y;
@@ -876,24 +904,7 @@ class SlippyTree {
                     if (isNaN(y)) {
                         // This is first item in column, position based on children
                         y = midy;
-                    } else if (midy < y) {
-                        /*
-                        // Midpoint of children is higher than our minimum position.
-                        // Shift all descendents down to match.
-                        const shifter = function(person, diff) {
-                            person.ty += diff;
-                            for (const spouse of person.layout.spouses) {
-                                spouse.ty += diff;
-                            }
-                            for (const child of person.children()) {
-                                shifter(child, diff);
-                            }
-                        };
-                        shifter(person, y - midy);
-                        ** disabled, this makes the tree bigger than necessary.
-                        ** force pull is not perfect but will do.
-                        */
-                    } else {
+                    } else if (midy > y) {
                         // Midpoint of children is lower than our minimum position.
                         // Move our position down to their midpoint.
                         y = midy;
@@ -912,10 +923,14 @@ class SlippyTree {
                     prev.layout.next = spouse;
                     spouse.layout.prevMargin = prev.layout.nextMargin = distance;
                     spouse.layout.prevRel = prev.layout.nextRel = "spouse";
+                    forces.push({name: "spouse", a: spouse, b: prev, iterations: ITERATIONS, func: (d) => d - distance });
                     y += distance;
                     spouse.ty = y;
                     if (isNaN(spouse.ty)) { console.log(spouse); throw new Error("NAN"); }
                     prev = spouse;
+                }
+                if (y > maxy) {
+                    maxy = y;
                 }
             } else {
                 // This node has been positioned, but traverse children anyway as
@@ -924,8 +939,9 @@ class SlippyTree {
                 for (const child of person.children()) {
                     func(person, child);
                 }
+                return mylast;  // return here to position nodes WRT to all children, including those owned by other nodes
             }
-            return mylast;  // return here to position nodes WRT to all children, including those owned by other nodes
+            return null;
         };
         // Traverse each tree from each root
         for (let subroot of roots) {
@@ -933,82 +949,97 @@ class SlippyTree {
                 func(null, root);
             }
         }
+        if (DEBUG) console.log("MAXY="+maxy);
         for (const person of ordered) {
             if (!person.hidden && isNaN(person.ty)) { console.log(person); throw new Error("NAN"); }
+                if (person.ty < -0.01 || person.ty > maxy + 0.01) {
+                    console.log(person);
+                    throw new Error();
+                }
         }
 
         // STEP 5
         // Layout is valid but we can improve it by doing a force layout between parents
         // and children to pull things to the center.
-        let pass;
-        const numpasses = 500;       // Arbitrary. Usually enough
-        for (let pass=0;pass<numpasses;pass++) {
-            for (const f of forces) {
-                // Compute vertical distance between parent/child and derive force
-                // between them from that. sqrt works, main thing is that double the
-                // distance must be more than double the force, otherwise we have
-                // a case where two children with distance (40, 0) is as good as (-20, 20)
-                // Once force computed, adjust both ends of the spring towards the center.
-                let distance = Math.abs(f.a.ty + f.a.layout.shift - f.b.ty - f.b.layout.shift);
-                let fval = Math.sqrt(distance);
-                if (f.a.ty + f.a.layout.shift > f.b.ty + f.b.layout.shift) {
-                    f.a.layout.shift -= fval / 2;
-                    f.b.layout.shift += fval / 2;
-                } else {
-                    f.a.layout.shift += fval / 2;
-                    f.b.layout.shift -= fval / 2;
-                }
-            }
-            for (const person of ordered) {
-                person.ty += person.layout.shift;
-                person.layout.shift = 0;
-            }
+        //
+        // That's the theory. In practice this algorithm is absolute hell. What follows is
+        // tested with a tree of about 250 nodes over 6 generations, and gets pretty close.
+        // However it needs the follow restraints:
+        // 1. Force moves will happily extend the height of the graph unless constrained.
+        // 2. Nodes cannot be pulled out of order in the column, otherwise the algorithm goes
+        //    for bigger and bigger moves and eventually requires a move that would fail rule 1.
+        //
+        for (let pass=0;pass<PASSES;pass++) {
+            if (DEBUG) console.log("pass " + pass);
+            for (let iteration=0;iteration<(pass + 1 == PASSES ? 1000 : ITERATIONS);iteration++) {
+                if (DEBUG) console.log("  iteration " + iteration);
+                for (const f of forces) {
+                    if (iteration < f.iterations) {
+                        const oa = f.a.ty + f.a.layout.shift;
+                        const ob = f.b.ty + f.b.layout.shift;
+                        const distance = oa - ob;  // +ve if a is lower
+                        const sign = Math.sign(distance);
+                        let force = f.func(distance); // +ve if closer together
+                        let t = 0.5, t0, t1;
+                        if (force == 0 || isNaN(force)) {
+                            // noop
+                        } else if (force > 0) {        // closer together
+                            force = Math.min(force, Math.abs(distance)); // Can't bring closer together than 100%
+                        } else {                        // move a down, b up. A is always below B with "force apart" forces
+                            t0 = Math.min((maxy - oa) / -force, 0.5);
+                            t1 = 1 - Math.min((ob - 0) / -force, 0.5);
+                            t = t0 < 0.5 ? t0 : t1 > 0.5 ? t1 : 0.5;
+                        }
 
-            // Now we have to correct any overlapping nodes. Traverse each node,
-            // any that overlap move both apart and repeat process for both those nodes.
-            // There were MANY variations of this tried, this method was the one that worked!
-            for (const person of ordered) {
-               q.push(person);
-               person.queued = true;
-            }
-            let person, count = 0;
-            while ((person = q.pop()) && count++ < 10 * ordered.length) {       // change to q.shift() to kill Chrome's naive Array implementation
-                person.queued = false;
-                if (person.layout.prev) {
-                    let diff = 0;
-                    let distance = person.ty - person.layout.prev.ty;
-                    if (distance < person.layout.prevMargin) {
-                        diff = person.layout.prevMargin - distance; // All nodes have a minimum clearance
-                    } else if (distance > person.layout.prevMargin && person.layout.prevRel == "spouse") {
-                        diff = person.layout.prevMargin - distance; // Spouses also have a maximum clearance (ie clearance is fixed)
-                    }
-                    if (diff) {
-                        person.layout.prev.ty -= diff / 2;
-                        person.ty += diff / 2;
-                        q.push(person);
-                        if (!person.queued) {
-                            person.queued = true;
-                            q.push(person.layout.prev);
+                        if (DEBUG) console.log("    f="+f.name+" a="+f.a+"@"+oa+" b="+f.b+"@"+ob+" d="+distance+" f="+force+"*"+sign+" t0="+t0+" t1="+t1+" t="+t);
+                        f.a.layout.shift -= force * sign * t;
+                        f.b.layout.shift += force * sign * (1 - t);
+                        if (force < 0 && f.a.generation == f.b.generation) {    // generations will always be the same
+                            // Prevent nodes from being forced apart so far they swap positions in the column
+                            // Pre
+                            if (f.a.layout.next && f.a.ty + f.a.layout.shift  > f.a.layout.next.ty + f.a.layout.next.layout.shift) {
+                                f.a.layout.shift = f.a.layout.next.ty + f.a.layout.next.layout.shift - f.a.ty - 1;
+                            }
+                            if (f.b.layout.prev && f.b.ty + f.b.layout.shift < f.b.layout.prev.ty + f.b.layout.prev.layout.shift) {
+                                f.b.layout.shift = f.b.layout.prev.ty + f.b.layout.prev.layout.shift - f.a.ty + 1;
+                            }
                         }
                     }
                 }
             }
+            for (const person of ordered) {
+                if (DEBUG) console.log("  person " + person + " ty="+person.ty+" shift="+person.layout.shift);
+                person.ty += person.layout.shift;
+                person.layout.shift = 0;
+            }
+            /*
+            for (const person of ordered) {
+                if (person.layout.next) {
+                    let diff = person.layout.next.ty - person.ty;
+                    if (diff < 0) {
+                        person.ty += diff / 2 - 0.5;;
+                        person.layout.next.ty -= diff / 2 - 0.5;;
+                    }
+                }
+            }
+            */
+            for (const person of ordered) {
+                if (person.ty < -0.01 || person.ty > maxy + 0.01) {
+                    throw new Error(person.ty);
+                }
+            }
         }
-        // The "last resort" push apart. Seems needed, but only by small amounts.
-        for (const person of ordered) {
-            if (person.layout.prev) {
-                let diff = 0;
-                let distance = person.ty - person.layout.prev.ty;
-                if (distance < person.layout.prevMargin) {
-                    diff = person.layout.prevMargin - distance; // All nodes have a minimum clearance
-                } else if (distance > person.layout.prevMargin && person.layout.prevRel == "spouse") {
-                    diff = person.layout.prevMargin - distance; // Spouses also have a maximum clearance
-                }
-                for (let n=person.layout.prev;n && diff;n=n.layout.prev) {
-                    n.ty -= diff / 2;
-                }
-                for (let n=person;n && diff;n=n.layout.next) {
-                    n.ty += diff / 2;
+        // Final, naive push apart. This will extend the height of the graph, but only enough
+        // to prevent nodes being too close. In theory we are very close to this already so 
+        // expansion is only a few percent.
+        for (let a of genpeople) {
+            for (let i=0;i+1<a.length;i++) {
+                let n0 = a[i];
+                let n1 = a[i + 1];
+                let distance = n1.ty - n0.ty;
+                let mindistance = n0.layout.nextMargin;
+                if (distance < mindistance) {
+                    n1.ty += mindistance - distance;
                 }
             }
         }
@@ -1108,6 +1139,21 @@ class SlippyTree {
         }
 
     }
+
+    dump() {
+        let a = [];
+        for (const person of this.people) {
+            if (person.isLoaded()) {
+                person.data.Id = person.id;
+                if (person == this.focus) {
+                    a.unshift(person.data);
+                } else {
+                    a.push(person.data);
+                }
+            }
+        }
+        console.log(JSON.stringify(a));
+    };
 
     formatDate(date, state) {
         if (!date || date == "9999") {
@@ -1352,8 +1398,8 @@ class Person {
 
     presentationExtra() {
         let out = "";
-        let birthDate = tree.formatDate(this.data.BirthDate, this.data.DataStatus ? this.data.DataStatus.BirthDate : null);
-        let deathDate = tree.formatDate(this.data.DeathDate, this.data.DataStatus ? this.data.DataStatus.DeathDate : null);
+        let birthDate = this.tree.formatDate(this.data.BirthDate, this.data.DataStatus ? this.data.DataStatus.BirthDate : null);
+        let deathDate = this.tree.formatDate(this.data.DeathDate, this.data.DataStatus ? this.data.DataStatus.DeathDate : null);
         if (birthDate && deathDate) {
             out += " (" + birthDate + " - " + deathDate + ")";
         } else if (birthDate) {
@@ -1597,4 +1643,34 @@ class Person {
     }
 }
 
+/*
+function main() {
+    const fs = require("node:fs");
+    let a = JSON.parse(fs.readFileSync(0))
+    const tree = new SlippyTree({ });
+    for (let x of a) {
+        const person = tree.find(x.Id);
+        person.load(x);
+    }
+    for (const person of tree.people) {
+        if (person.data.Father && tree.byid[person.data.Father.toString()]) {
+            person.link("father", tree.find(person.data.Father));
+        }
+        if (person.data.Mother && tree.byid[person.data.Mother.toString()]) {
+            person.link("mother", tree.find(person.data.Mother));
+        }
+        for (let s of person.data.Spouses) {
+            if (tree.byid[s.Id.toString()]) {
+                person.link("spouse", tree.find(s.Id.toString()));
+            }
+        }
+    }
+    tree.refocus(tree.people[0]);
+}
+if (typeof window == "undefined") {
+    main();
+}
+*/
+
 window.addEventListener("DOMContentLoaded", initialize);
+
