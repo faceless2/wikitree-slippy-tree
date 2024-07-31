@@ -38,19 +38,14 @@ function initialize(svg) {
         }
     });
     loadButton.addEventListener("click", (e) => {
-        helpContainer.classList.add("hidden");
         let id = idField.value.trim();
-        tree.reset(id);
+        if (id) {
+            helpContainer.classList.add("hidden");
+            tree.reset(id);
+        }
     });
     helpButton.addEventListener("click", (e) => {
-        helpContainer.classList.remove("hidden");
-    });
-    helpContainer.addEventListener("click", (e) => {
-        let elt = document.elementFromPoint(e.pageX, e.pageY);
-        let tag = elt.nodeName;
-        if (tag != "INPUT" && tag != "BUTTON" && tag != "A") {
-            helpContainer.classList.add("hidden");
-        }
+        helpContainer.classList.toggle("hidden");
     });
     loginButton.addEventListener("click", (e) => {
         if (getCookie("userName")) {
@@ -59,21 +54,6 @@ function initialize(svg) {
             login(true);
         }
     });
-    const resizeHelp = function() {
-        const helpInner = helpContainer.firstElementChild;
-        let scale = Math.min(window.innerWidth / helpInner.clientWidth, window.innerHeight / helpInner.clientHeight);
-        if (scale < 1) {
-            helpInner.style.transform = "scale(" + scale + ", " + scale + ")";
-        } else {
-            delete helpInner.style.transform;
-        }
-    };
-    window.addEventListener("resize", resizeHelp);
-    window.addEventListener("orientationchange", resizeHelp);
-    if (screen && screen.orientation) {
-        screen.orientation.addEventListener("change", resizeHelp);
-    }
-    resizeHelp();
 
     let key = new URLSearchParams(window.location.search).get("key");
     if (key) {
