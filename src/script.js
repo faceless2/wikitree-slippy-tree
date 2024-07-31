@@ -544,7 +544,8 @@ class SlippyTree {
         // position based on focus node and priority
         // After this each person has "tx" and "ty" value set
         let ordered = this.order(focus, this.people);
-        this.placeNodes(focus, ordered, "d3");
+        let marriages = [];
+        this.placeNodes(focus, ordered, marriages);
 
         // Re-add edges, people, labels in priority order
         const peoplepane = this.svg.querySelector(".people");
@@ -583,7 +584,7 @@ class SlippyTree {
                         } else {
                             path.classList.add("parent");
                         }
-                    } else if (r.rel == "spouse" && person.layout.spouses && person.layout.spouses.includes(r.person)) {
+                    } else if (r.rel == "spouse" && person.ty < r.person.ty) {
                         path = document.createElementNS(SVG, "path");
                         path.setAttribute("id", "edge-" + r.person.id + "-" + person.id);
                         if (r.type == "inferred") {
@@ -606,27 +607,20 @@ class SlippyTree {
                     }
                 }
             }
-            if (person.layout.spouses) {
-                let lastspouse = person;
-                for (const spouse of person.layout.spouses) {
-                    let r;
-                    for (const r2 of person.relations) {
-                        if (r2.rel == "spouse" && r2.person == spouse) {
-                            r = r2;
-                            break;
-                        }
-                    }
-                    if (r.rel == "spouse" && r.type != "inferred" && r.date) {
+            for (const marriage of marriages) {
+                const person = marriage.a;
+                const spouse = marriage.b;
+                for (const r of person.relations) {
+                    if (r.rel == "spouse" && r.person == spouse && r.type != "inferred" && r.date) {
                         let text = document.createElementNS(SVG, "text");
                         text.appendChild(document.createTextNode(this.formatDate(r.date)));
                         text.classList.add("marriage");
-                        text.setAttribute("id", "label-" + r.person.id + "-" + person.id);
+                        text.setAttribute("id", "label-" + person.id + "-" + spouse.id);
                         labels.appendChild(text);
                         // Don't really have a good idea to display multiple spouses,
                         // at the moment it looks like each spouse marries the next one.
-                        text.person0 = lastspouse;
-                        text.person1 = r.person;
-                        lastspouse = r.person;
+                        text.person0 = marriage.top;
+                        text.person1 = marriage.bot;
                         if (person == focus || r.person == focus) {
                             text.classList.add("focus");
                         }
@@ -717,8 +711,9 @@ class SlippyTree {
      * Position all the nodes. After this method they all have "tx" and "ty" set
      * @param focus the focal node
      * @param ordered the ordered array of people in priority order
+     * @param marriages an array to be populated with [{a:person, b:person, top: person, bot: person}]. The marriage between a and b is to be positioned between top and bot
      */
-    placeNodes(focus, ordered, forceType) {
+    placeNodes(focus, ordered, marriages) {
         const style = this.svg ? getComputedStyle(this.svg) : null;
         const MINWIDTH = style ? this.#evalLength(style, style.getPropertyValue("--min-person-width")) : 50;
         const SPOUSEMARGIN = style ? this.#evalLength(style, style.getPropertyValue("--spouse-margin")) : 10;
@@ -726,8 +721,7 @@ class SlippyTree {
         const OTHERMARGIN = style ? this.#evalLength(style, style.getPropertyValue("--other-margin")) : 40;
         const GENERATIONMARGIN = style ? this.#evalLength(style, style.getPropertyValue("--generation-margin")) : 100;
         const PASSES = 1000;
-        const ITERATIONS = 10;
-        const DEBUG = false; // typeof window == "undefined";
+        const DEBUG = typeof window == "undefined";
 
         const genpeople = [];
         const genwidth = [];
@@ -744,7 +738,14 @@ class SlippyTree {
                 genwidth[generation] = MINWIDTH;
             }
             genwidth[generation] = Math.max(genwidth[generation], person.width);
-            person.layout = { shift: 0, spouses: [] };
+            person.clump = {
+                people: [person],
+                shift: 0,
+                shiftCount: 0,
+                toString: function() {
+                    return "(" + this.people.length + " from \"" + this.people[0].presentationName() + "\" to \"" + this.people[this.people.length - 1].presentationName() + "\" shift="+(this.shift/this.shiftCount)+" from " + this.shiftCount + " gap=["+this.prevMargin+" "+this.nextMargin+"])";
+                }
+            };
         }
 
         // STEP 1
@@ -799,7 +800,7 @@ class SlippyTree {
             }
             for (const par of person.parents()) {
                 if (!par.hidden) {
-                    forces.push({name: "child", a: par, b: person, iterations:1, func: (d) => Math.abs(d) < 1 ? Math.abs(d) : Math.log(Math.abs(d) - 1) });
+                    forces.push({name: "child", a: par, b: person, iterations:1, func: (d) => Math.abs(d) < 1 ? Math.abs(d) : Math.log(Math.abs(d) - 1) * 4 });
                 }
             }
             if (person.svg) {
@@ -825,6 +826,9 @@ class SlippyTree {
         // The end result of this is a valid layout, no overlaps, but everything is squished
         // towards the top of each column.
         //
+        // People are also assigned to "clumps" - a sequence of nodes in a column that move
+        // together. Clumps are initially set to a node and its spouses.
+        //
         let maxy = 0;
         const func = function(owner, person) {
             if (person.hidden) {
@@ -847,9 +851,12 @@ class SlippyTree {
                             spouse.svg.classList.add("spouse");
                         }
                         spouse.tx += 10;
+                        marriages.push({a:person, b:spouse, top:mylast, bot: spouse});
                         mylast = spouse;
-                        person.layout.spouses.push(spouse);
+                        person.clump.people.push(spouse);
+                        spouse.clump = person.clump;
                         spouseheight += spouse.height + SPOUSEMARGIN;
+
                     }
                 }
                 // Recursively position children, keeping track of first/last child.
@@ -880,23 +887,10 @@ class SlippyTree {
                         rel = null;
                     }
                     y += (prev.height + person.height) / 2;
-                    forces.push({
-                      name: rel ? rel : "other",
-                      a: person,
-                      b: prev,
-                      iterations: ITERATIONS,
-                      func: ((y) => {
-                          if (rel == "spouse") {
-                              return (d) => d - y;
-                          } else {
-                              return (d) => Math.min(0, d - y); // return -ve value to push apart
-                          }
-                      })(y)
-                    });
-                    person.layout.prev = prev;
-                    prev.layout.next = person;
-                    person.layout.prevMargin = prev.layout.nextMargin = y;
-                    person.layout.prevRel = prev.layout.nextRel = rel;
+                    person.clump.prev = prev.clump;
+                    prev.clump.next = person.clump;
+                    person.clump.prevMargin = prev.clump.nextMargin = y;
+                    person.clump.prevRel = prev.clump.nextRel = rel;
                     y += prev.ty;
                 }
                 if (firstchild) { // Y value also derived from mid-point of children
@@ -917,21 +911,17 @@ class SlippyTree {
                 if (isNaN(person.ty)) { console.log(person); throw new Error("NAN"); }
                 // Node is positioned, now position spouses relative to this node.
                 prev = person;
-                for (const spouse of person.layout.spouses) {
-                    const distance = (prev.height + spouse.height) / 2 + SPOUSEMARGIN;
-                    spouse.layout.prev = prev;
-                    prev.layout.next = spouse;
-                    spouse.layout.prevMargin = prev.layout.nextMargin = distance;
-                    spouse.layout.prevRel = prev.layout.nextRel = "spouse";
-                    forces.push({name: "spouse", a: spouse, b: prev, iterations: ITERATIONS, func: (d) => d - distance });
-                    y += distance;
-                    spouse.ty = y;
-                    if (isNaN(spouse.ty)) { console.log(spouse); throw new Error("NAN"); }
-                    prev = spouse;
+                for (const spouse of person.clump.people) {
+                    if (spouse != person) {
+                        const distance = (prev.height + spouse.height) / 2 + SPOUSEMARGIN;
+                        y += distance;
+                        spouse.ty = y;
+                    }
                 }
                 if (y > maxy) {
                     maxy = y;
                 }
+                return mylast;  // return here to position nodes WRT to all children, including those owned by other nodes
             } else {
                 // This node has been positioned, but traverse children anyway as
                 // this node might have been positioned as another's spouse, and
@@ -939,7 +929,6 @@ class SlippyTree {
                 for (const child of person.children()) {
                     func(person, child);
                 }
-                return mylast;  // return here to position nodes WRT to all children, including those owned by other nodes
             }
             return null;
         };
@@ -962,113 +951,124 @@ class SlippyTree {
         // Layout is valid but we can improve it by doing a force layout between parents
         // and children to pull things to the center.
         //
-        // That's the theory. In practice this algorithm is absolute hell. What follows is
-        // tested with a tree of about 250 nodes over 6 generations, and gets pretty close.
-        // However it needs the follow restraints:
-        // 1. Force moves will happily extend the height of the graph unless constrained.
-        // 2. Nodes cannot be pulled out of order in the column, otherwise the algorithm goes
-        //    for bigger and bigger moves and eventually requires a move that would fail rule 1.
+        // That's the theory. In practice this algorithm is absolute hell. After many iterations
+        // the algorithm is:
+        //  * calculate the forces on each "clump" as the average of the pull between nodes.
+        //  * for each column, see if moving a clump would collide with another clump? If it
+        //    would, merge those clumps and repeat.
         //
-        if (forceType == "d3") {
-            console.log("D3 Force");
-            for (const person of ordered) {
-                person.oy = person.y;
-                person.y = person.ty;
+        for (let pass=0;pass<PASSES;pass++) {
+            let maxdy = 0;
+            if (DEBUG) console.log("pass " + pass);
+            for (const f of forces) {
+                const oa = f.a.ty + (f.a.clump.shiftCount == 0 ? 0 : f.a.clump.shift / f.a.clump.shiftCount);
+                const ob = f.b.ty + (f.b.clump.shiftCount == 0 ? 0 : f.b.clump.shift / f.b.clump.shiftCount);
+                const distance = oa - ob;  // +ve if a is lower
+                const sign = Math.sign(distance);
+                let force = f.func(distance); // +ve if closer together
+                if (DEBUG) console.log("  f="+f.name+" a="+f.a+"@"+oa+" b="+f.b+"@"+ob+" d="+distance+" f="+force+"*"+sign);
+                f.a.clump.shift -= force * sign;
+                f.a.clump.shiftCount++;
+                f.b.clump.shift += force * sign;
+                f.b.clump.shiftCount++;
             }
-            const simulation = d3.forceSimulation(ordered);
-            let links = [];
-            for (const f in forces) {
-                if (f.type == "child") {
-                    links.add({source:f.a, target:f.b, distance: 0});
-                }
-            }
-            simulation.force("child", d3.forceLink(links));
-            simulation.force("column", (a) => {
-                console.log("HERE");
-                for (const person of ordered) {
-                    if (person.layout.prev) {
-                        if (person.y - person.layout.prev.y < person.layout.prevMargin) {
-                            person.y = person.layout.prev.y + person.layout.prevMargin;
-                        }
-                    }
-                }
-            });
-            simulation.tick(300);
-            for (const person of ordered) {
-                person.ty = person.y;
-                person.y = person.oy;
-            }
-        } else if (forceType != "none") {
-            for (let pass=0;pass<PASSES;pass++) {
-                if (DEBUG) console.log("pass " + pass);
-                for (let iteration=0;iteration<(pass + 1 == PASSES ? 1000 : ITERATIONS);iteration++) {
-                    if (DEBUG) console.log("  iteration " + iteration);
-                    for (const f of forces) {
-                        if (iteration < f.iterations) {
-                            const oa = f.a.ty + f.a.layout.shift;
-                            const ob = f.b.ty + f.b.layout.shift;
-                            const distance = oa - ob;  // +ve if a is lower
-                            const sign = Math.sign(distance);
-                            let force = f.func(distance); // +ve if closer together
-                            let t = 0.5, t0, t1;
-                            if (force == 0 || isNaN(force)) {
-                                // noop
-                            } else if (force > 0) {        // closer together
-                                force = Math.min(force, Math.abs(distance)); // Can't bring closer together than 100%
-                            } else {                        // move a down, b up. A is always below B with "force apart" forces
-                                t0 = Math.min((maxy - oa) / -force, 0.5);
-                                t1 = 1 - Math.min((ob - 0) / -force, 0.5);
-                                t = t0 < 0.5 ? t0 : t1 > 0.5 ? t1 : 0.5;
-                            }
-
-                            if (DEBUG) console.log("    f="+f.name+" a="+f.a+"@"+oa+" b="+f.b+"@"+ob+" d="+distance+" f="+force+"*"+sign+" t0="+t0+" t1="+t1+" t="+t);
-                            f.a.layout.shift -= force * sign * t;
-                            f.b.layout.shift += force * sign * (1 - t);
-                            if (force < 0 && f.a.generation == f.b.generation) {    // generations will always be the same
-                                // Prevent nodes from being forced apart so far they swap positions in the column
-                                if (f.a.layout.next && f.a.ty + f.a.layout.shift  > f.a.layout.next.ty + f.a.layout.next.layout.shift) {
-                                    f.a.layout.shift = f.a.layout.next.ty + f.a.layout.next.layout.shift - f.a.ty - 1;
-                                }
-                                if (f.b.layout.prev && f.b.ty + f.b.layout.shift < f.b.layout.prev.ty + f.b.layout.prev.layout.shift) {
-                                    f.b.layout.shift = f.b.layout.prev.ty + f.b.layout.prev.layout.shift - f.a.ty + 1;
-                                }
-                            }
-                        }
-                    }
-                }
-                for (const person of ordered) {
-                    if (DEBUG) console.log("  person " + person + " ty="+person.ty+" shift="+person.layout.shift);
-                    person.ty += person.layout.shift;
-                    person.layout.shift = 0;
-                }
-                for (let a of genpeople) {
-                    for (const person of a) {
-                        if (person.ty > maxy + 0.01 && person.layout.prev) {
-                            console.log("Position failed: person="+person+" 0<="+person.ty+"<="+maxy);
-                            person.ty = person.layout.prev.ty + person.layout.prevMargin;
-                            pass = PASSES;
-                        }
-                    }
-                }
-            }
-            // Final, naive push apart. This will extend the height of the graph, but only enough
-            // to prevent nodes being too close. In theory we are very close to this already so 
-            // expansion is only a few percent.
             for (let a of genpeople) {
-                for (let i=0;i+1<a.length;i++) {
-                    let n0 = a[i];
-                    let n1 = a[i + 1];
-                    let distance = n1.ty - n0.ty;
-                    if (isNaN(distance) || n1.ty > 70000) {
-                        // Panic. Redo without force
-                        this.placeNodes(focus, ordered, "none");
-                        return 
+                const MAXREPEAT = 1000; // just in case
+                for (let repeat=0;repeat < MAXREPEAT;repeat++) {
+                    let repeatNeeded = false;
+                    let numclumps = 0;
+                    for (let clump = a[0].clump;clump;clump=clump.next) {
+                        clump.index = numclumps++;
                     }
-                    let mindistance = n0.layout.nextMargin;
-                    if (distance < mindistance) {
-                        n1.ty = n0.ty + mindistance;
+                    if (DEBUG) console.log("  column " + genpeople.indexOf(a) + " has " + numclumps + " clumps");
+                    for (let clump = a[0].clump;clump;clump=clump.next) {
+                        const prev = clump.prev;
+                        const next = clump.next;
+                        let dy = clump.shift / clump.shiftCount;
+                        if (dy < 0) {
+                            const y = clump.people[0].ty;
+                            const gap = clump.prevMargin;
+                            if (prev) {
+                                let prevy = prev.people[prev.people.length - 1].ty;
+                                let prevdy = prev.shift / prev.shiftCount;
+                                let overlap = (prevy + prevdy + gap) - (y + dy) 
+                                if (overlap > 0) {  // Shift up collides
+                                    dy = prevy - y + gap;
+                                    if (DEBUG) console.log("      clump #" + clump.index + clump + ",top="+y+" overlaps prev " + prev + ",bot="+(prevy+prevdy)+"+"+gap+"  by " + overlap + ", moving by " + dy + " and merging up");
+                                    for (const person of clump.people) {
+                                        person.ty += dy;
+                                        person.clump = prev;
+                                    }
+                                    prev.people = prev.people.concat(clump.people);
+                                    prev.shift += clump.shift;
+                                    prev.shiftCount += clump.shiftCount;
+                                    prev.next = next;
+                                    if (next) {
+                                        next.prev = prev;
+                                    }
+                                    repeatNeeded = true;
+                                } else {
+                                    if (DEBUG) console.log("      clump #" + clump.index + clump + ",top="+y+" has no overlap");
+                                }
+                            } else if (y + dy < 0) {
+                                let v = clump.shift * (y - 0) / -dy;
+                                if (DEBUG) console.log("      clump #" + clump.index + clump + ",top="+y+" hits min=0, reducing shift to " + (v / clump.shiftCount));
+                                clump.shift = v;
+                            }
+                        } else if (dy > 0) {
+                            const y = clump.people[clump.people.length - 1].ty;
+                            const gap = clump.nextMargin;
+                            let dy = clump.shift / clump.shiftCount;
+                            if (next) {
+                                let nexty = next.people[0].ty;
+                                let nextdy = next.shift / next.shiftCount;
+                                let overlap = (y + dy) - (nexty + nextdy - gap);
+                                if (overlap > 0) {  // Shift down collides
+                                    dy = nexty - y - gap;
+                                    if (DEBUG) console.log("      clump #" + clump.index + clump + ",bot="+y+" overlaps next " + next + ",top="+(nexty+nextdy)+"-"+gap+"  by " + overlap + ", moving by " + dy + " and merging down");
+                                    for (const person of clump.people) {
+                                        person.ty += dy;
+                                        person.clump = next;
+                                    }
+                                    next.people = clump.people.concat(next.people);
+                                    next.shift += clump.shift;
+                                    next.shiftCount += clump.shiftCount;
+                                    next.prev = prev;
+                                    if (prev) {
+                                        prev.next = next;
+                                    }
+                                    repeatNeeded = true;
+                                } else {
+                                    if (DEBUG) console.log("      clump #" + clump.index + clump + ",bot="+y+" has no overlap: y="+y+"+"+dy+" next.y="+nexty+"+"+nextdy+" gap="+gap+" ol="+overlap);
+                                }
+                            } else if (y + dy > maxy) {
+                                let v = clump.shift * (maxy - y) / dy;
+                                if (DEBUG) console.log("      clump #" + clump.index + clump + ",bot="+y+" hits max="+maxy+", reducing shift to " + (v / clump.shiftCount));
+                                clump.shift = v;
+                                repeatNeeded = true;
+                            }
+                        } else {
+                            if (DEBUG) console.log("      clump #" + clump.index + clump + " has no shift");
+                        }
+                    }
+                    if (!repeatNeeded) {
+                        break;
                     }
                 }
+                let i = 0;
+                for (let clump = a[0].clump;clump;clump=clump.next) {
+                    clump.index = i++;
+                    let dy = clump.shift / clump.shiftCount;
+                    maxdy = Math.max(Math.abs(dy), maxdy);
+                    if (DEBUG) console.log("    clump #" + clump.index + clump + " moving by " + dy);
+                    for (const person of clump.people) {
+                        person.ty += dy;
+                    }
+                    clump.shift = clump.shiftCount = 0;
+                }
+            }
+            if (maxdy < 1) {
+                pass = PASSES;
             }
         }
     }
@@ -1127,13 +1127,14 @@ class SlippyTree {
             const p1 = path.person1;
             let px0, py0, px1, py1, px2, py2, px3, py3;
             if (path.classList.contains("marriage") || path.classList.contains("coparent")) {
-                px0 = Math.round(p0.cx) + p0.genwidth * -0.5 + 2;
-                py0 = Math.round(p0.cy) + p0.height   * 0.5;
-                px3 = Math.round(p1.cx) + p1.genwidth * -0.5;
+                let edge = p0.cx < p1.cx ? -1 : 1;
+                px0 = Math.round(p0.cx) + p0.genwidth * 0.5 * edge;
+                py0 = Math.round(p0.cy) + p0.height   * 0;
+                px3 = Math.round(p1.cx) + p1.genwidth * 0.5 * edge;
                 py3 = Math.round(p1.cy) + p1.height   * 0;
-                px1 = px0;
-                py1 = py3;
-                px2 = px0;
+                px1 = (edge < 0 ? Math.min(px0, px3) : Math.max(px0, px3)) + 10 * edge;
+                py1 = py0;
+                px2 = px1;
                 py2 = py3;
             } else {
                 px0 = Math.round(p0.cx) + p0.genwidth * -0.5;
@@ -1151,7 +1152,8 @@ class SlippyTree {
         for (let label=labels.firstElementChild;label;label=label.nextElementSibling) {
             const p0 = label.person0;
             const p1 = label.person1;
-            let cx = Math.round(p0.cx + p1.cx) / 2;
+            let cx = Math.round(Math.min(p0.cx - p0.genwidth * 0.5,  p1.cx - p0.genwidth * 0.5));
+            label.classList.add("left");
             let cy = Math.round(p0.cy + p1.cy) / 2;
             label.setAttribute("x", cx);
             label.setAttribute("y", cy);
@@ -1467,7 +1469,7 @@ class Person {
         if (date == "0000" || date == "0000-00-00") {
             date = null;
         }
-//        log("Link " + this + (rel == "parent" ? " parent " : rel == "child" ? " child " : " spouse ") + person);
+        // console.log("Link " + this + " " + rel + " " + person);
         let add = true, changed = false;
         for (let i=0;i<this.relations.length;i++) {
             const r = this.relations[i];
@@ -1500,7 +1502,10 @@ class Person {
             if (rel == "parent") {
                 person.link("child", this, type);
                 for (let sibling of person.children()) {
-                    person.link("sibling", this);
+                    if (sibling != this) {
+                        this.link("sibling", sibling);
+                        sibling.link("sibling", this);
+                    }
                 }
             } else if (rel == "spouse") {
                 person.link("spouse", this, type, date);
@@ -1671,8 +1676,8 @@ class Person {
     }
 }
 
-/*
 function main() {
+    // For command line testing.
     const fs = require("node:fs");
     let a = JSON.parse(fs.readFileSync(0))
     const tree = new SlippyTree({ });
@@ -1689,7 +1694,7 @@ function main() {
         }
         for (let s of person.data.Spouses) {
             if (tree.byid[s.Id.toString()]) {
-                person.link("spouse", tree.find(s.Id.toString()));
+                person.link("spouse", tree.find(s.Id.toString()), null, s.MarriageDate);
             }
         }
     }
@@ -1697,8 +1702,7 @@ function main() {
 }
 if (typeof window == "undefined") {
     main();
+} else {
+    window.addEventListener("DOMContentLoaded", initialize);
 }
-*/
-
-window.addEventListener("DOMContentLoaded", initialize);
 

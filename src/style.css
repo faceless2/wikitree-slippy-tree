@@ -141,6 +141,9 @@ h1 {
     text-anchor: middle;
     margin: 4px;    /* Hack! Margin doesnt apply in SVG, but we read this value in the JS to compute position */
 }
+.slippy-tree text.left {
+    text-anchor: start;
+}
 
 .slippy-tree .people rect {
     fill: white;
@@ -207,7 +210,7 @@ h1 {
 .slippy-tree .labels .marriage {
     font-size: 8px;
     fill: black;
-    transform: translate(8px, 0.2em);
+    transform: translate(8px, 0.4em);
 }
 
 .slippy-tree :is(.relations, .people. .labels) .focus {
