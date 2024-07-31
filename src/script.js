@@ -15,7 +15,7 @@ function initialize(svg) {
         element: "#scrollpane",
         menu: "#personMenu",
         dragScrollReversed: false,
-        profileTarget: "_blank"
+        profileTarget: "_blank",
     });
     window.tree = tree;
 
@@ -177,6 +177,8 @@ class SlippyTree {
      *  - trackpad: if true, the mousewheel is identified a trackpad, if false it's a mouse. Optional, will auto-detect by default
      *  - profileTarget: the target for any links to profiles, eg "_blank". Optional
      *  - dragScrollReversed: set to true to inverse the way drag-scrolling works. Optional.
+     *  - bundleSpouses: how many depths of spouses to bundle together in the tree - 1 includes spouses of the person, 2 includes their
+     *          spouses (so long as they have no other home in the tree), and so on. 0 disables bundling. Default is 2
      */
     constructor(props) {
         this.props = props;
@@ -697,11 +699,13 @@ class SlippyTree {
         const style = this.svg ? getComputedStyle(this.svg) : null;
         const MINWIDTH = style ? this.#evalLength(style, style.getPropertyValue("--min-person-width")) : 50;
         const SPOUSEMARGIN = style ? this.#evalLength(style, style.getPropertyValue("--spouse-margin")) : 10;
+        const SPOUSEINDENT = style ? this.#evalLength(style, style.getPropertyValue("--spouse-indent")) : 10;
         const SIBLINGMARGIN = style ? this.#evalLength(style, style.getPropertyValue("--sibling-margin")) : 20;
         const OTHERMARGIN = style ? this.#evalLength(style, style.getPropertyValue("--other-margin")) : 40;
         const GENERATIONMARGIN = style ? this.#evalLength(style, style.getPropertyValue("--generation-margin")) : 100;
         const PASSES = 1000;
         const DEBUG = typeof window == "undefined";
+        const bundleSpouses = typeof this.props.bundleSpouses == "number" ? this.props.bundleSpouses : 2;
 
         const genpeople = [];
         const genwidth = [];
@@ -824,19 +828,55 @@ class SlippyTree {
                 // Only position ones with the same generation. It's theoretically
                 // possible for a spouse to be in a different generation, but that
                 // should only happen if they've been laid out as a child of a different root
-                for (const spouse of person.spouses()) {
-                    if (!spouse.hidden && spouse.generation == generation && !genpeople[generation].includes(spouse)) {
-                        genpeople[generation].push(spouse);
-                        if (spouse.svg) {
-                            spouse.svg.classList.add("spouse");
+                //
+                // Also position spouses-of-spouses, recursively, if and only if they meet the following criteria:
+                //  * no loaded father or mother
+                //  * only children they share are shared with the original spouse.
+                if (bundleSpouses > 0) {
+                    let sq = [{depth:1, person:person}];
+                    for (const spousecheck of sq) {
+                        if (DEBUG) console.log("Considering spouses("+spousecheck.depth+") for "+person);
+                        for (const spouse of spousecheck.person.spouses()) {
+                            let reason = null;
+                            if (spouse.hidden) {
+                                reason = "hidden";
+                            } else if (spouse.generation != generation) {
+                                reason = "genmismtch"
+                            } else if (genpeople[generation].includes(spouse)) {
+                                reason = "already listed";
+                            } else if (spousecheck.depth > 1) {
+                                if (spouse.father && spouse.father.isLoaded()) {
+                                    reason = "has father";
+                                } else if (spouse.mother && spouse.mother.isLoaded()) {
+                                    reason = "has mother";
+                                } else {
+                                    for (let child of spouse.children()) {
+                                        if (((child.father == spouse && child.mother != spousecheck.person) || (child.mother == spouse && child.father != spousecheck.person))) {
+                                            reason = "different child " + c;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            if (!reason) {
+                                if (DEBUG) console.log("Accepting spouse " + spouse + " of " + spousecheck.person);
+                                genpeople[generation].push(spouse);
+                                if (spouse.svg) {
+                                    spouse.svg.classList.add("spouse");
+                                }
+                                spouse.tx += SPOUSEINDENT * spousecheck.depth;
+                                marriages.push({a:spousecheck.person, b:spouse, top:mylast, bot: spouse});
+                                mylast = spouse;
+                                person.clump.people.push(spouse);
+                                spouse.clump = person.clump;
+                                spouseheight += spouse.height + SPOUSEMARGIN;
+                                if (spousecheck.depth + 1 <= bundleSpouses) {
+                                    sq.push({depth:spousecheck.depth + 1, person: spouse});
+                                }
+                            } else {
+                                if (DEBUG) console.log("Skipping spouse " + spouse + " of " + spousecheck.person + ": " + reason);
+                            }
                         }
-                        spouse.tx += 10;
-                        marriages.push({a:person, b:spouse, top:mylast, bot: spouse});
-                        mylast = spouse;
-                        person.clump.people.push(spouse);
-                        spouse.clump = person.clump;
-                        spouseheight += spouse.height + SPOUSEMARGIN;
-
                     }
                 }
                 // Recursively position children, keeping track of first/last child.

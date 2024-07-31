@@ -129,6 +129,7 @@ h1 {
     --member: #ebba34;
     /* These are accessed in JS. Values must be pixels, not other lengths */
     --spouse-margin: 10px;
+    --spouse-indent: 10px;
     --sibling-margin: 20px;
     --other-margin: 40px;
     --generation-margin: 100px;
