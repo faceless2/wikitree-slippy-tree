@@ -97,25 +97,25 @@ h1 {
     font-size: 16px;
     /*filter: drop-shadow(6px 8px 4px #0008); -- too many rendering failures with this */
     z-index:999;
-    padding: 8px;
+    padding: 0;
 }
 
 #personMenu > * {
-    margin-top: 8px;
+    padding: 8px;
     display: block;
     color: initial;
     text-decoration: none;
 }
 
 #personMenu > *:first-child {
-    color: gray;
-    font-style: italic;
+    background: #888;
+    font-weight: bold;
+    color: white;
     user-select: text !important;
-    padding-top: 0;
 }
 
 #personMenu > *[data-action]:hover {
-    background-color: #CFC;
+    background-color: #DED;
 }
 
 .slippy-tree {
