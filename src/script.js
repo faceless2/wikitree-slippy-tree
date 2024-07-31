@@ -7,7 +7,7 @@ const SVG = "http://www.w3.org/2000/svg";
 const MINSCALE = 0.2, MAXSCALE = 2.5;
 
 /**
- * This is the entry point
+ * This is the entry point. If the URL has a "key" parameter it will be loaded, eg "?key=Windsor-1"
  */
 function initialize(svg) {
     // Create a tree with some default settings
@@ -57,7 +57,7 @@ function initialize(svg) {
 
     let key = new URLSearchParams(window.location.search).get("key");
     if (key) {
-        id.value = key.trim();
+        idField.value = key.trim();
         loadButton.click();
     }
 }
