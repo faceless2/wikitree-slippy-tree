@@ -918,6 +918,8 @@ class SlippyTree {
                 func(null, root);
             }
         }
+        /*
+         * - no, previous alg can put a node at -5
         if (DEBUG) console.log("MAXY="+maxy);
         for (const person of ordered) {
             if (!person.hidden && isNaN(person.ty)) { console.log(person); throw new Error("NAN"); }
@@ -926,6 +928,7 @@ class SlippyTree {
                 throw new Error();
             }
         }
+        */
 
         // STEP 5
         // Layout is valid but we can improve it by doing a force layout between parents
@@ -1038,11 +1041,13 @@ class SlippyTree {
                 let i = 0;
                 for (let clump = a[0].clump;clump;clump=clump.next) {
                     clump.index = i++;
-                    let dy = clump.shift / clump.shiftCount;
-                    maxdy = Math.max(Math.abs(dy), maxdy);
-                    if (DEBUG) console.log("    clump #" + clump.index + clump + " moving by " + dy);
-                    for (const person of clump.people) {
-                        person.ty += dy;
+                    if (clump.shiftCount) {
+                        let dy = clump.shift / clump.shiftCount;
+                        maxdy = Math.max(Math.abs(dy), maxdy);
+                        if (DEBUG) console.log("    clump #" + clump.index + clump + " moving by " + dy);
+                        for (const person of clump.people) {
+                            person.ty += dy;
+                        }
                     }
                     clump.shift = clump.shiftCount = 0;
                 }
