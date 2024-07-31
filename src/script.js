@@ -4,7 +4,7 @@ const APIURL = "https://api.wikitree.com/api.php";
 const APPID = "MikesSlippyTree";
 const DEMOID = "Windsor-1";
 const SVG = "http://www.w3.org/2000/svg";
-const MINSCALE = 0.5, MAXSCALE = 2.5;
+const MINSCALE = 0.2, MAXSCALE = 2.5;
 
 /**
  * This is the entry point
@@ -544,7 +544,7 @@ class SlippyTree {
         // position based on focus node and priority
         // After this each person has "tx" and "ty" value set
         let ordered = this.order(focus, this.people);
-        this.placeNodes(focus, ordered);
+        this.placeNodes(focus, ordered, "d3");
 
         // Re-add edges, people, labels in priority order
         const peoplepane = this.svg.querySelector(".people");
@@ -718,7 +718,7 @@ class SlippyTree {
      * @param focus the focal node
      * @param ordered the ordered array of people in priority order
      */
-    placeNodes(focus, ordered) {
+    placeNodes(focus, ordered, forceType) {
         const style = this.svg ? getComputedStyle(this.svg) : null;
         const MINWIDTH = style ? this.#evalLength(style, style.getPropertyValue("--min-person-width")) : 50;
         const SPOUSEMARGIN = style ? this.#evalLength(style, style.getPropertyValue("--spouse-margin")) : 10;
@@ -952,10 +952,10 @@ class SlippyTree {
         if (DEBUG) console.log("MAXY="+maxy);
         for (const person of ordered) {
             if (!person.hidden && isNaN(person.ty)) { console.log(person); throw new Error("NAN"); }
-                if (person.ty < -0.01 || person.ty > maxy + 0.01) {
-                    console.log(person);
-                    throw new Error();
-                }
+            if (person.ty < -0.01 || person.ty > maxy + 0.01) {
+                console.log(person);
+                throw new Error();
+            }
         }
 
         // STEP 5
@@ -969,77 +969,105 @@ class SlippyTree {
         // 2. Nodes cannot be pulled out of order in the column, otherwise the algorithm goes
         //    for bigger and bigger moves and eventually requires a move that would fail rule 1.
         //
-        for (let pass=0;pass<PASSES;pass++) {
-            if (DEBUG) console.log("pass " + pass);
-            for (let iteration=0;iteration<(pass + 1 == PASSES ? 1000 : ITERATIONS);iteration++) {
-                if (DEBUG) console.log("  iteration " + iteration);
-                for (const f of forces) {
-                    if (iteration < f.iterations) {
-                        const oa = f.a.ty + f.a.layout.shift;
-                        const ob = f.b.ty + f.b.layout.shift;
-                        const distance = oa - ob;  // +ve if a is lower
-                        const sign = Math.sign(distance);
-                        let force = f.func(distance); // +ve if closer together
-                        let t = 0.5, t0, t1;
-                        if (force == 0 || isNaN(force)) {
-                            // noop
-                        } else if (force > 0) {        // closer together
-                            force = Math.min(force, Math.abs(distance)); // Can't bring closer together than 100%
-                        } else {                        // move a down, b up. A is always below B with "force apart" forces
-                            t0 = Math.min((maxy - oa) / -force, 0.5);
-                            t1 = 1 - Math.min((ob - 0) / -force, 0.5);
-                            t = t0 < 0.5 ? t0 : t1 > 0.5 ? t1 : 0.5;
+        if (forceType == "d3") {
+            console.log("D3 Force");
+            for (const person of ordered) {
+                person.oy = person.y;
+                person.y = person.ty;
+            }
+            const simulation = d3.forceSimulation(ordered);
+            let links = [];
+            for (const f in forces) {
+                if (f.type == "child") {
+                    links.add({source:f.a, target:f.b, distance: 0});
+                }
+            }
+            simulation.force("child", d3.forceLink(links));
+            simulation.force("column", (a) => {
+                console.log("HERE");
+                for (const person of ordered) {
+                    if (person.layout.prev) {
+                        if (person.y - person.layout.prev.y < person.layout.prevMargin) {
+                            person.y = person.layout.prev.y + person.layout.prevMargin;
                         }
+                    }
+                }
+            });
+            simulation.tick(300);
+            for (const person of ordered) {
+                person.ty = person.y;
+                person.y = person.oy;
+            }
+        } else if (forceType != "none") {
+            for (let pass=0;pass<PASSES;pass++) {
+                if (DEBUG) console.log("pass " + pass);
+                for (let iteration=0;iteration<(pass + 1 == PASSES ? 1000 : ITERATIONS);iteration++) {
+                    if (DEBUG) console.log("  iteration " + iteration);
+                    for (const f of forces) {
+                        if (iteration < f.iterations) {
+                            const oa = f.a.ty + f.a.layout.shift;
+                            const ob = f.b.ty + f.b.layout.shift;
+                            const distance = oa - ob;  // +ve if a is lower
+                            const sign = Math.sign(distance);
+                            let force = f.func(distance); // +ve if closer together
+                            let t = 0.5, t0, t1;
+                            if (force == 0 || isNaN(force)) {
+                                // noop
+                            } else if (force > 0) {        // closer together
+                                force = Math.min(force, Math.abs(distance)); // Can't bring closer together than 100%
+                            } else {                        // move a down, b up. A is always below B with "force apart" forces
+                                t0 = Math.min((maxy - oa) / -force, 0.5);
+                                t1 = 1 - Math.min((ob - 0) / -force, 0.5);
+                                t = t0 < 0.5 ? t0 : t1 > 0.5 ? t1 : 0.5;
+                            }
 
-                        if (DEBUG) console.log("    f="+f.name+" a="+f.a+"@"+oa+" b="+f.b+"@"+ob+" d="+distance+" f="+force+"*"+sign+" t0="+t0+" t1="+t1+" t="+t);
-                        f.a.layout.shift -= force * sign * t;
-                        f.b.layout.shift += force * sign * (1 - t);
-                        if (force < 0 && f.a.generation == f.b.generation) {    // generations will always be the same
-                            // Prevent nodes from being forced apart so far they swap positions in the column
-                            // Pre
-                            if (f.a.layout.next && f.a.ty + f.a.layout.shift  > f.a.layout.next.ty + f.a.layout.next.layout.shift) {
-                                f.a.layout.shift = f.a.layout.next.ty + f.a.layout.next.layout.shift - f.a.ty - 1;
-                            }
-                            if (f.b.layout.prev && f.b.ty + f.b.layout.shift < f.b.layout.prev.ty + f.b.layout.prev.layout.shift) {
-                                f.b.layout.shift = f.b.layout.prev.ty + f.b.layout.prev.layout.shift - f.a.ty + 1;
+                            if (DEBUG) console.log("    f="+f.name+" a="+f.a+"@"+oa+" b="+f.b+"@"+ob+" d="+distance+" f="+force+"*"+sign+" t0="+t0+" t1="+t1+" t="+t);
+                            f.a.layout.shift -= force * sign * t;
+                            f.b.layout.shift += force * sign * (1 - t);
+                            if (force < 0 && f.a.generation == f.b.generation) {    // generations will always be the same
+                                // Prevent nodes from being forced apart so far they swap positions in the column
+                                if (f.a.layout.next && f.a.ty + f.a.layout.shift  > f.a.layout.next.ty + f.a.layout.next.layout.shift) {
+                                    f.a.layout.shift = f.a.layout.next.ty + f.a.layout.next.layout.shift - f.a.ty - 1;
+                                }
+                                if (f.b.layout.prev && f.b.ty + f.b.layout.shift < f.b.layout.prev.ty + f.b.layout.prev.layout.shift) {
+                                    f.b.layout.shift = f.b.layout.prev.ty + f.b.layout.prev.layout.shift - f.a.ty + 1;
+                                }
                             }
                         }
                     }
                 }
-            }
-            for (const person of ordered) {
-                if (DEBUG) console.log("  person " + person + " ty="+person.ty+" shift="+person.layout.shift);
-                person.ty += person.layout.shift;
-                person.layout.shift = 0;
-            }
-            /*
-            for (const person of ordered) {
-                if (person.layout.next) {
-                    let diff = person.layout.next.ty - person.ty;
-                    if (diff < 0) {
-                        person.ty += diff / 2 - 0.5;;
-                        person.layout.next.ty -= diff / 2 - 0.5;;
+                for (const person of ordered) {
+                    if (DEBUG) console.log("  person " + person + " ty="+person.ty+" shift="+person.layout.shift);
+                    person.ty += person.layout.shift;
+                    person.layout.shift = 0;
+                }
+                for (let a of genpeople) {
+                    for (const person of a) {
+                        if (person.ty > maxy + 0.01 && person.layout.prev) {
+                            console.log("Position failed: person="+person+" 0<="+person.ty+"<="+maxy);
+                            person.ty = person.layout.prev.ty + person.layout.prevMargin;
+                            pass = PASSES;
+                        }
                     }
                 }
             }
-            */
-            for (const person of ordered) {
-                if (person.ty < -0.01 || person.ty > maxy + 0.01) {
-                    throw new Error(person.ty);
-                }
-            }
-        }
-        // Final, naive push apart. This will extend the height of the graph, but only enough
-        // to prevent nodes being too close. In theory we are very close to this already so 
-        // expansion is only a few percent.
-        for (let a of genpeople) {
-            for (let i=0;i+1<a.length;i++) {
-                let n0 = a[i];
-                let n1 = a[i + 1];
-                let distance = n1.ty - n0.ty;
-                let mindistance = n0.layout.nextMargin;
-                if (distance < mindistance) {
-                    n1.ty += mindistance - distance;
+            // Final, naive push apart. This will extend the height of the graph, but only enough
+            // to prevent nodes being too close. In theory we are very close to this already so 
+            // expansion is only a few percent.
+            for (let a of genpeople) {
+                for (let i=0;i+1<a.length;i++) {
+                    let n0 = a[i];
+                    let n1 = a[i + 1];
+                    let distance = n1.ty - n0.ty;
+                    if (isNaN(distance) || n1.ty > 70000) {
+                        // Panic. Redo without force
+                        this.placeNodes(focus, ordered, "none");
+                        return 
+                    }
+                    let mindistance = n0.layout.nextMargin;
+                    if (distance < mindistance) {
+                        n1.ty = n0.ty + mindistance;
+                    }
                 }
             }
         }
