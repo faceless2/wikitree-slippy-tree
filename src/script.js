@@ -2,7 +2,8 @@
 
 const APIURL = "https://api.wikitree.com/api.php";
 const APPID = "MikesSlippyTree";
-const DEMOID = "Windsor-1";
+//const DEMOID = "Windsor-1";
+const DEMOID = "Gatley-97";
 const SVG = "http://www.w3.org/2000/svg";
 const MINSCALE = 0.2, MAXSCALE = 2.5;
 
@@ -215,6 +216,21 @@ class SlippyTree {
             this.svg = document.createElementNS(SVG, "svg");
             this.svg.classList.add("slippy-tree");
             this.scrollPane.appendChild(this.svg);
+            let defs = document.createElementNS(SVG, "defs");
+            this.svg.appendChild(defs);
+            for (let c of ["mother", "father"]) {
+                let lg = document.createElementNS(SVG, "linearGradient");
+                lg.setAttribute("id", "unloaded-" + c);
+                let st1 = document.createElementNS(SVG, "stop");
+                st1.setAttribute("offset", "70%");
+                st1.style.stopColor = "var(--" + c + "-transparent)";
+                lg.appendChild(st1);
+                let st2 = document.createElementNS(SVG, "stop");
+                st2.setAttribute("offset", "100%");
+                st2.style.stopColor = "var(--" + c + ")";
+                lg.appendChild(st2);
+                defs.appendChild(lg);
+            }
             let container = document.createElementNS(SVG, "g");
             container.classList.add("container");
             this.svg.appendChild(container);
@@ -334,7 +350,7 @@ class SlippyTree {
         Object.keys(this.byid).forEach(key => delete this.byid[key]);
         this.focus = this.#refocusStart = this.#refocusEnd = null;
         // Clearing is a bit ad-hoc
-        const container = this.svg.firstChild;
+        const container = this.svg.querySelector(".container");
         for (let n=container.firstChild;n;n=n.nextSibling) {
             while (n.firstChild) {
                 n.firstChild.remove();
@@ -586,6 +602,23 @@ class SlippyTree {
                             path.classList.add("focus");
                             focusedges.push(path);
                         }
+                    }
+                } else if (r.rel == "parent") {
+                    path = document.createElementNS(SVG, "path");
+                    path.setAttribute("id", "edge-" + r.person.id + "-" + person.id);
+                    if (r.person == person.father) {
+                        path.classList.add("unloaded-father");
+                    } else if (r.person == person.mother) {
+                        path.classList.add("unloaded-mother");
+                    }
+                    if (r.type) {
+                        path.classList.add(r.type);
+                    }
+                    edges.appendChild(path);
+                    path.person0 = person;
+                    if (person == focus || r.person == focus) {
+                        path.classList.add("focus");
+                        focusedges.push(path);
                     }
                 }
             }
@@ -1162,10 +1195,14 @@ class SlippyTree {
                 px2 = px1;
                 py2 = py3;
             } else {
+                const p1cx = p1 ? p1.cx : p0.cx - (p0.genwidth * 0.5) - 100
+                const p1cy = p1 ? p1.cy : p0.cy + (path.classList.contains("unloaded-father") ? -40 : 40);
+                const p1w = p1 ? p1.genwidth : 0;
+                const p1h = p1 ? p1.height : 0;
                 px0 = Math.round(p0.cx) + p0.genwidth * -0.5;
                 py0 = Math.round(p0.cy) + p0.height   * 0;
-                px3 = Math.round(p1.cx) + p1.genwidth * 0.5;
-                py3 = Math.round(p1.cy) + p1.height   * 0;
+                px3 = Math.round(p1cx) + p1w * 0.5;
+                py3 = Math.round(p1cy) + p1h   * 0;
                 px1 = px0 + (px3 - px0) / 2;
                 py1 = py0;
                 px2 = px0 + (px3 - px0) / 2;
@@ -1217,10 +1254,10 @@ class SlippyTree {
             date = date.substring(0, 4);
         } else if (date.endsWith("-00")) {
             date = date.substring(0, date.length - 2) + "27";
-            date = new Intl.DateTimeFormat(undefined , { dateStyle: "medium", }).format(Date.parse(date));
+            date = new Intl.DateTimeFormat(undefined , { dateStyle: "medium", timeZone: "UTC"}).format(Date.parse(date));
             date = date.replace(/\b27[,]?\s*/, "");
         } else {
-            date = new Intl.DateTimeFormat(undefined , { dateStyle: "medium", }).format(Date.parse(date));
+            date = new Intl.DateTimeFormat(undefined , { dateStyle: "medium", timeZone: "UTC"}).format(Date.parse(date));
         }
         if (state == "guess") {
             date = "c" + date;

@@ -121,6 +121,8 @@ h1 {
 .slippy-tree {
     --mother:  red;
     --father:  blue;
+    --mother-transparent:  #F000;
+    --father-transparent:  #00F0;
     --neutral: #8C8;
     --marriage: #181;
     --coparent: none;
@@ -214,6 +216,8 @@ h1 {
 .slippy-tree .relations .confident              { stroke-width: 9px; }
 .slippy-tree .relations .nonbiological          { stroke: var(--neutral); }
 .slippy-tree .relations .uncertain              { stroke-dasharray: 8px; }
+.slippy-tree .relations .unloaded-mother        { stroke: url("#unloaded-mother"); }
+.slippy-tree .relations .unloaded-father        { stroke: url("#unloaded-father"); }
 
 .slippy-tree .labels .marriage {
     font-size: 8px;
